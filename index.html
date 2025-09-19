@@ -39,7 +39,7 @@
         }
 
         #screen {
-            font-size: 12px;
+            font-size: 9px;
             line-height: 1.0;
             letter-spacing: 0;
             white-space: pre;
@@ -135,7 +135,7 @@
         /* Responsive adjustments */
         @media (max-width: 768px) {
             #screen {
-                font-size: 8px;
+                font-size: 7px;
             }
 
             #instructions,
@@ -145,6 +145,12 @@
         }
 
         @media (max-height: 600px) {
+            #screen {
+                font-size: 8px;
+            }
+        }
+
+        @media (min-width: 1400px) {
             #screen {
                 font-size: 10px;
             }
@@ -527,10 +533,10 @@
         // Global game configuration
         const CONFIG = {
             screen: {
-                width: 120,
-                height: 40,
-                minWidth: 80,
-                minHeight: 24
+                width: 160,
+                height: 60,
+                minWidth: 120,
+                minHeight: 40
             },
             rendering: {
                 fov: Math.PI * 66 / 180, // 66 degrees in radians
@@ -1214,33 +1220,87 @@
             }
         }
 
-        // WorldModel class for managing map data and spatial queries
+        // SpatialHash class for efficient tree collision detection
+        class SpatialHash {
+            constructor(cellSize) {
+                this.cellSize = cellSize;
+                this.grid = new Map();
+            }
+
+            getKey(x, y) {
+                const gx = Math.floor(x / this.cellSize);
+                const gy = Math.floor(y / this.cellSize);
+                return `${gx},${gy}`;
+            }
+
+            addTree(tree) {
+                const key = this.getKey(tree.x, tree.y);
+                if (!this.grid.has(key)) {
+                    this.grid.set(key, []);
+                }
+                this.grid.get(key).push(tree);
+            }
+
+            getTreesInCell(x, y) {
+                const key = this.getKey(x, y);
+                return this.grid.get(key) || [];
+            }
+
+            getTreesAlongRay(startX, startY, dirX, dirY, maxDistance) {
+                const trees = [];
+                const stepSize = this.cellSize * 0.5;
+                const steps = Math.ceil(maxDistance / stepSize);
+                const visited = new Set();
+
+                for (let i = 0; i <= steps; i++) {
+                    const x = startX + dirX * i * stepSize;
+                    const y = startY + dirY * i * stepSize;
+                    const key = this.getKey(x, y);
+
+                    if (!visited.has(key)) {
+                        visited.add(key);
+                        trees.push(...this.getTreesInCell(x, y));
+                    }
+                }
+
+                return trees;
+            }
+
+            clear() {
+                this.grid.clear();
+            }
+        }
+
+        // WorldModel class for managing forest data and spatial queries
         class WorldModel {
             constructor(mapData = null) {
                 // Map dimensions
-                this.width = 10;
-                this.height = 10;
+                this.width = 40;
+                this.height = 40;
 
-                // Wall data (0 = passable, 1+ = wall type)
+                // Wall data (0 = passable, 1+ = wall type) - for fences/cabins
                 this.walls = [];
 
-                // Objects in the world
+                // Forest trees (cylinders)
+                this.trees = [];
+
+                // Objects in the world (sprites)
                 this.objects = [];
 
-                // Doorways (passable openings)
-                this.doorways = [];
-
                 // Player starting position
-                this.playerStart = { x: 2.0, y: 2.0, angle: 0 };
+                this.playerStart = { x: 20.0, y: 20.0, angle: 0 };
 
                 // Floor pattern type
-                this.floorPattern = 'grid';
+                this.floorPattern = 'forest';
+
+                // Spatial hash for performance
+                this.spatialHash = new SpatialHash(2.0); // Cell size = trunk diameter
 
                 // Load map data if provided
                 if (mapData) {
                     this.loadMap(mapData);
                 } else {
-                    this.createDefaultMap();
+                    this.createForestMap();
                 }
             }
 
@@ -1261,50 +1321,150 @@
                     console.log(`Map loaded: ${this.width}x${this.height} with ${this.objects.length} objects`);
                 } catch (error) {
                     console.error('Failed to load map data:', error);
-                    this.createDefaultMap();
+                    this.createForestMap();
                 }
             }
 
-            // Create a default test map
-            createDefaultMap() {
-                this.width = 10;
-                this.height = 10;
+            // Create forest map using Poisson-disk sampling
+            createForestMap() {
+                // Clear existing data
+                this.trees = [];
+                this.objects = [];
+                this.spatialHash.clear();
 
-                // Create walls array (1 = wall, 0 = empty space)
+                // Generate trees using Poisson-disk sampling
+                const minSpacing = 1.8;
+                const maxTries = 30;
+                const trees = this.poissonDiskSampling(this.width, this.height, minSpacing, maxTries);
+
+                // Create tree objects
+                for (const point of trees) {
+                    // Vary trunk radius (0.4-0.6)
+                    const radius = 0.4 + Math.random() * 0.2;
+                    const height = 8 + Math.random() * 4; // 8-12 units tall
+
+                    const tree = {
+                        x: point.x,
+                        y: point.y,
+                        radius: radius,
+                        height: height,
+                        type: Math.random() > 0.7 ? 'pine' : 'oak'
+                    };
+
+                    this.trees.push(tree);
+                    this.spatialHash.addTree(tree);
+                }
+
+                // Add diverse forest objects (logs, rocks, mushrooms, flowers)
+                this.objects = [
+                    // Fallen logs
+                    { x: 15.2, y: 12.8, type: 'log', sprite: '═', size: 0.8 },
+                    { x: 28.7, y: 25.1, type: 'log', sprite: '║', size: 0.9 },
+                    { x: 6.3, y: 35.4, type: 'log', sprite: '═', size: 0.7 },
+
+                    // Rocks and boulders
+                    { x: 25.1, y: 18.3, type: 'rock', sprite: '●', size: 0.6 },
+                    { x: 35.7, y: 8.9, type: 'boulder', sprite: '◆', size: 1.0 },
+                    { x: 12.4, y: 30.7, type: 'rock', sprite: '○', size: 0.5 },
+                    { x: 33.2, y: 15.6, type: 'rock', sprite: '●', size: 0.4 },
+
+                    // Mushrooms and fungi
+                    { x: 8.5, y: 32.2, type: 'mushroom', sprite: '♠', size: 0.3 },
+                    { x: 18.9, y: 22.1, type: 'mushroom', sprite: '♣', size: 0.25 },
+                    { x: 31.6, y: 11.8, type: 'toadstool', sprite: '♠', size: 0.4 },
+
+                    // Forest flowers and plants
+                    { x: 22.3, y: 16.7, type: 'flower', sprite: '*', size: 0.2 },
+                    { x: 14.8, y: 28.9, type: 'flower', sprite: '✿', size: 0.2 },
+                    { x: 37.1, y: 19.4, type: 'bush', sprite: '※', size: 0.6 },
+                    { x: 9.7, y: 14.2, type: 'fern', sprite: '♦', size: 0.3 }
+                ];
+
+                // Create minimal walls (none for pure forest, could add cabin later)
                 this.walls = [];
                 for (let y = 0; y < this.height; y++) {
-                    const row = [];
-                    for (let x = 0; x < this.width; x++) {
-                        // Create border walls and some interior walls
-                        if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
-                            row.push(1); // Border walls
-                        } else if (x === 5 && y > 2 && y < 7) {
-                            row.push(1); // Interior wall
-                        } else {
-                            row.push(0); // Empty space
-                        }
-                    }
+                    const row = new Array(this.width).fill(0);
                     this.walls.push(row);
                 }
 
-                // Add doorway in the middle wall
-                this.doorways = [
-                    { x1: 5, y1: 4, x2: 5, y2: 5, width: 1.5 }
-                ];
+                console.log(`Forest created with ${this.trees.length} trees`);
+            }
 
-                // Add some test objects
-                this.objects = [
-                    { x: 3.5, y: 3.5, type: 'crate', sprite: '#', size: 0.6 },
-                    { x: 7.2, y: 6.8, type: 'table', sprite: '=', size: 0.8 },
-                    { x: 2.1, y: 7.3, type: 'barrel', sprite: 'O', size: 0.5 },
-                    { x: 8.5, y: 2.2, type: 'pillar', sprite: '|', size: 0.4 }
-                ];
+            // Poisson-disk sampling for natural tree placement
+            poissonDiskSampling(width, height, minDist, maxTries) {
+                const cellSize = minDist / Math.sqrt(2);
+                const gridW = Math.ceil(width / cellSize);
+                const gridH = Math.ceil(height / cellSize);
+                const grid = new Array(gridW * gridH).fill(-1);
 
-                // Set player start position
-                this.playerStart = { x: 2.0, y: 2.0, angle: 0 };
-                this.floorPattern = 'grid';
+                const points = [];
+                const activeList = [];
 
-                console.log('Default map created');
+                // Add initial point
+                const initial = { x: width * 0.5, y: height * 0.5 };
+                points.push(initial);
+                activeList.push(0);
+
+                const gx = Math.floor(initial.x / cellSize);
+                const gy = Math.floor(initial.y / cellSize);
+                grid[gy * gridW + gx] = 0;
+
+                while (activeList.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * activeList.length);
+                    const pointIndex = activeList[randomIndex];
+                    const point = points[pointIndex];
+
+                    let found = false;
+
+                    for (let tries = 0; tries < maxTries; tries++) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        const radius = minDist + Math.random() * minDist;
+
+                        const newX = point.x + Math.cos(angle) * radius;
+                        const newY = point.y + Math.sin(angle) * radius;
+
+                        if (newX >= 2 && newX < width - 2 && newY >= 2 && newY < height - 2) {
+                            const newGx = Math.floor(newX / cellSize);
+                            const newGy = Math.floor(newY / cellSize);
+
+                            let valid = true;
+
+                            // Check surrounding cells
+                            for (let dy = -2; dy <= 2 && valid; dy++) {
+                                for (let dx = -2; dx <= 2 && valid; dx++) {
+                                    const checkX = newGx + dx;
+                                    const checkY = newGy + dy;
+
+                                    if (checkX >= 0 && checkX < gridW && checkY >= 0 && checkY < gridH) {
+                                        const neighborIndex = grid[checkY * gridW + checkX];
+                                        if (neighborIndex !== -1) {
+                                            const neighbor = points[neighborIndex];
+                                            const dist = Math.sqrt((newX - neighbor.x) ** 2 + (newY - neighbor.y) ** 2);
+                                            if (dist < minDist) {
+                                                valid = false;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (valid) {
+                                const newPoint = { x: newX, y: newY };
+                                points.push(newPoint);
+                                activeList.push(points.length - 1);
+                                grid[newGy * gridW + newGx] = points.length - 1;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!found) {
+                        activeList.splice(randomIndex, 1);
+                    }
+                }
+
+                return points;
             }
 
             // Validate map data integrity
@@ -1377,19 +1537,46 @@
 
             // Check if a position is passable (considering doorways)
             isPassable(x, y) {
-                // First check if it's a wall
-                if (!this.isWall(x, y)) {
-                    return true; // Empty space is passable
+                // Check walls first
+                if (this.isWall(x, y)) {
+                    return false;
                 }
 
-                // Check if position is within a doorway
-                for (const door of this.doorways) {
-                    if (this.isInDoorway(x, y, door)) {
-                        return true;
+                // Check tree collisions using spatial hash
+                const nearbyTrees = this.spatialHash.getTreesInCell(x, y);
+                for (const tree of nearbyTrees) {
+                    const dx = x - tree.x;
+                    const dy = y - tree.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < tree.radius) {
+                        return false; // Inside tree trunk
                     }
                 }
 
-                return false; // Wall and not in doorway
+                return true;
+            }
+
+            // Check collision between player and trees
+            checkTreeCollision(playerX, playerY, playerRadius) {
+                const nearbyTrees = this.spatialHash.getTreesInCell(playerX, playerY);
+
+                for (const tree of nearbyTrees) {
+                    const dx = playerX - tree.x;
+                    const dy = playerY - tree.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const minDistance = playerRadius + tree.radius;
+
+                    if (distance < minDistance) {
+                        return {
+                            collided: true,
+                            tree: tree,
+                            distance: distance,
+                            normal: { x: dx / distance, y: dy / distance }
+                        };
+                    }
+                }
+
+                return { collided: false };
             }
 
             // Check if position is within a doorway
@@ -2413,16 +2600,108 @@
                 // Render sprites
                 this.renderSprites(player, world, asciiMapper, screenBuffer);
 
+                // Render canopy (skybox)
+                this.renderCanopy(player, screenBuffer);
+
+                // Render falling leaves particle effect
+                this.renderFallingLeaves(player, screenBuffer);
+
+                // Render enhanced POV hands
+                this.renderPOVHands(player, screenBuffer);
+
                 screenBuffer.render();
             }
 
-            // Cast a single ray using DDA algorithm
+            // Cast ray with both wall DDA and tree ray-circle intersection
             castWallRay(startX, startY, angle, world, ray) {
                 ray.reset();
 
                 const rayDirX = Math.cos(angle);
                 const rayDirY = Math.sin(angle);
 
+                // Check tree intersections first (ray-circle)
+                const treeHit = this.castTreeRay(startX, startY, rayDirX, rayDirY, world);
+
+                // Check wall intersections (DDA)
+                const wallHit = this.castWallDDA(startX, startY, rayDirX, rayDirY, world);
+
+                // Use closest hit
+                if (treeHit.hit && (!wallHit.hit || treeHit.distance < wallHit.distance)) {
+                    ray.perpWallDist = treeHit.distance;
+                    ray.distance = treeHit.distance;
+                    ray.hitX = treeHit.hitX;
+                    ray.hitY = treeHit.hitY;
+                    ray.side = 2; // Tree marker
+                    ray.wallType = 2; // Tree type
+                    ray.wallX = treeHit.wallX;
+                } else if (wallHit.hit) {
+                    ray.perpWallDist = wallHit.distance;
+                    ray.distance = wallHit.distance;
+                    ray.hitX = wallHit.hitX;
+                    ray.hitY = wallHit.hitY;
+                    ray.side = wallHit.side;
+                    ray.wallType = wallHit.wallType;
+                    ray.wallX = wallHit.wallX;
+                } else {
+                    // No hit - set to max distance
+                    ray.perpWallDist = 20;
+                    ray.distance = 20;
+                }
+            }
+
+            // Ray-circle intersection for trees
+            castTreeRay(startX, startY, rayDirX, rayDirY, world) {
+                const maxDistance = 20;
+                const trees = world.spatialHash.getTreesAlongRay(startX, startY, rayDirX, rayDirY, maxDistance);
+
+                let closestHit = { hit: false, distance: maxDistance };
+
+                for (const tree of trees) {
+                    // Ray-circle intersection math
+                    const ocX = startX - tree.x;
+                    const ocY = startY - tree.y;
+
+                    const a = rayDirX * rayDirX + rayDirY * rayDirY; // Should be 1 for normalized ray
+                    const b = 2 * (rayDirX * ocX + rayDirY * ocY);
+                    const c = ocX * ocX + ocY * ocY - tree.radius * tree.radius;
+
+                    const discriminant = b * b - 4 * a * c;
+
+                    if (discriminant >= 0) {
+                        const sqrtDisc = Math.sqrt(discriminant);
+                        const t1 = (-b - sqrtDisc) / (2 * a);
+                        const t2 = (-b + sqrtDisc) / (2 * a);
+
+                        // Take smallest positive t
+                        let t = -1;
+                        if (t1 > 0.01) t = t1;
+                        else if (t2 > 0.01) t = t2;
+
+                        if (t > 0 && t < closestHit.distance) {
+                            const hitX = startX + rayDirX * t;
+                            const hitY = startY + rayDirY * t;
+
+                            // Calculate wall X for bark texture
+                            const angle = Math.atan2(hitY - tree.y, hitX - tree.x);
+                            const wallX = (angle + Math.PI) / (2 * Math.PI); // 0-1
+
+                            closestHit = {
+                                hit: true,
+                                distance: t,
+                                hitX: hitX,
+                                hitY: hitY,
+                                wallX: wallX,
+                                tree: tree
+                            };
+                        }
+                    }
+                }
+
+                return closestHit;
+            }
+
+            // Original DDA wall casting
+            castWallDDA(startX, startY, rayDirX, rayDirY, world) {
                 let mapX = Math.floor(startX);
                 let mapY = Math.floor(startY);
 
@@ -2451,7 +2730,7 @@
                 let hit = false;
                 let side;
 
-                while (!hit) {
+                while (!hit && (Math.abs(mapX - startX) < 20 && Math.abs(mapY - startY) < 20)) {
                     if (sideDistX < sideDistY) {
                         sideDistX += deltaDistX;
                         mapX += stepX;
@@ -2467,6 +2746,10 @@
                     }
                 }
 
+                if (!hit) {
+                    return { hit: false };
+                }
+
                 // Calculate distance
                 let perpWallDist;
                 if (side === 0) {
@@ -2475,6 +2758,27 @@
                     perpWallDist = (mapY - startY + (1 - stepY) / 2) / rayDirY;
                 }
 
+                const hitX = startX + perpWallDist * rayDirX;
+                const hitY = startY + perpWallDist * rayDirY;
+
+                let wallX;
+                if (side === 0) {
+                    wallX = hitY - Math.floor(hitY);
+                } else {
+                    wallX = hitX - Math.floor(hitX);
+                }
+
+                return {
+                    hit: true,
+                    distance: perpWallDist,
+                    hitX: hitX,
+                    hitY: hitY,
+                    side: side,
+                    wallType: world.getWallAt(mapX, mapY),
+                    wallX: wallX
+                };
+            }
+
                 ray.perpWallDist = perpWallDist;
                 ray.distance = perpWallDist;
                 ray.hitX = startX + perpWallDist * rayDirX;
@@ -2482,76 +2786,392 @@
                 ray.side = side;
                 ray.wallType = world.getWallAt(mapX, mapY);
 
-                // Calculate wall X coordinate for texturing
-                if (side === 0) {
-                    ray.wallX = ray.hitY - Math.floor(ray.hitY);
-                } else {
-                    ray.wallX = ray.hitX - Math.floor(ray.hitX);
-                }
+            // Calculate wall X coordinate for texturing
+            if(side === 0) {
+            ray.wallX = ray.hitY - Math.floor(ray.hitY);
+        } else {
+            ray.wallX = ray.hitX - Math.floor(ray.hitX);
+        }
             }
 
-            // Draw a wall slice
-            drawWallSlice(x, ray, asciiMapper, screenBuffer) {
-                const char = asciiMapper.getWallChar(ray.distance, ray.wallType);
+        // Draw a wall or tree slice
+        drawWallSlice(x, ray, asciiMapper, screenBuffer) {
+            let char;
 
-                for (let y = ray.drawStart; y <= ray.drawEnd; y++) {
+            if (ray.side === 2) {
+                // Tree trunk - add bark texture
+                char = this.getTreeChar(ray.distance, ray.wallX);
+            } else {
+                // Regular wall
+                char = asciiMapper.getWallChar(ray.distance, ray.wallType);
+            }
+
+            for (let y = ray.drawStart; y <= ray.drawEnd; y++) {
+                screenBuffer.setPixel(x, y, char);
+            }
+        }
+
+        // Get tree character with bark texture
+        getTreeChar(distance, wallX) {
+            const palette = "██▓▓▒▒░░:.";
+
+            // Distance-based character
+            let charIndex = Math.min(Math.floor(distance / 2), palette.length - 1);
+
+            // Add bark texture variation
+            const barkPattern = Math.floor(wallX * 6) % 2;
+            if (barkPattern === 1 && charIndex > 0) {
+                charIndex = Math.max(0, charIndex - 1); // Slightly brighter for bark ridges
+            }
+
+            // Distance fog - blend to lighter chars after 12 units
+            if (distance > 12) {
+                const fogFactor = Math.min((distance - 12) / 8, 1); // 0-1 over 8 units
+                const fogIndex = palette.length - 2; // Near lightest char
+                charIndex = Math.floor(charIndex + fogFactor * (fogIndex - charIndex));
+            }
+
+            return palette[Math.min(charIndex, palette.length - 1)];
+        }
+
+        // Render floor using simple distance-based approach
+        renderFloor(player, world, asciiMapper, screenBuffer) {
+            const horizonLine = player.getHorizonLine(this.screenHeight);
+            const handAreaHeight = 12; // Reserve space for POV hands (higher res)
+
+            for (let y = horizonLine + 1; y < this.screenHeight - handAreaHeight; y++) {
+                const rowDistance = (this.screenHeight / 2) / (y - horizonLine);
+
+                for (let x = 0; x < this.screenWidth; x++) {
+                    const cameraX = 2 * x / this.screenWidth - 1;
+                    const floorX = player.x + rowDistance * (Math.cos(player.angle) + cameraX * Math.cos(player.angle + Math.PI / 2));
+                    const floorY = player.y + rowDistance * (Math.sin(player.angle) + cameraX * Math.sin(player.angle + Math.PI / 2));
+
+                    const char = this.getForestFloorChar(floorX, floorY, rowDistance);
                     screenBuffer.setPixel(x, y, char);
                 }
             }
+        }
 
-            // Render floor using simple distance-based approach
-            renderFloor(player, world, asciiMapper, screenBuffer) {
-                const horizonLine = player.getHorizonLine(this.screenHeight);
+        // Generate forest floor character with leaf litter texture
+        getForestFloorChar(x, y, distance) {
+            const palette = ".:,;*xo%#@";
 
-                for (let y = horizonLine + 1; y < this.screenHeight; y++) {
-                    const rowDistance = (this.screenHeight / 2) / (y - horizonLine);
+            // Hash-based leaf litter texture
+            const ix = Math.floor(x * 4);
+            const iy = Math.floor(y * 4);
+            const hash = this.hash2D(ix, iy);
 
-                    for (let x = 0; x < this.screenWidth; x++) {
-                        const cameraX = 2 * x / this.screenWidth - 1;
-                        const floorX = player.x + rowDistance * (Math.cos(player.angle) + cameraX * Math.cos(player.angle + Math.PI / 2));
-                        const floorY = player.y + rowDistance * (Math.sin(player.angle) + cameraX * Math.sin(player.angle + Math.PI / 2));
+            // Dappled light calculation (aligned to canopy gaps)
+            const lightX = Math.floor(x * 0.3);
+            const lightY = Math.floor(y * 0.3);
+            const windOffset = Math.floor(Date.now() * 0.0002); // Slow wind movement
+            const lightHash = this.hash2D(lightX + windOffset, lightY);
+            const lightIntensity = (lightHash % 5) / 4; // 0-1 light intensity
 
-                        const char = asciiMapper.getFloorChar(rowDistance, floorX, floorY, world.floorPattern);
-                        screenBuffer.setPixel(x, y, char);
+            // Base texture from leaf litter
+            let textureIndex = hash % palette.length;
+
+            // Apply dappled lighting
+            const lightBoost = Math.floor(lightIntensity * 3); // 0-2 brightness boost
+            textureIndex = Math.max(0, textureIndex - lightBoost);
+
+            // Distance fog - fade to lighter chars
+            const distanceFactor = Math.min(distance / 12, 1);
+            if (distanceFactor > 0.8) {
+                // Far distance - blend to fog
+                const fogAmount = (distanceFactor - 0.8) * 5; // 0-1
+                textureIndex = Math.floor(textureIndex + fogAmount * (palette.length - textureIndex));
+            }
+
+            return palette[Math.min(textureIndex, palette.length - 1)];
+        }
+
+        // Simple 2D hash function
+        hash2D(x, y) {
+            let hash = ((x << 16) ^ y) * 0x45d9f3b;
+            hash = hash ^ (hash >> 16);
+            hash = hash * 0x45d9f3b;
+            hash = hash ^ (hash >> 16);
+            return Math.abs(hash);
+        }
+
+        // Render forest canopy as skybox
+        renderCanopy(player, screenBuffer) {
+            const horizonLine = player.getHorizonLine(this.screenHeight);
+            const canopyChars = "▓▒░ ";
+
+            // Enhanced wind with multiple layers
+            const time = Date.now() * 0.0001;
+            const windX = Math.sin(time * 0.7) * 0.3;
+            const windY = Math.cos(time * 0.5) * 0.2;
+
+            // Only render above horizon
+            for (let y = 0; y < horizonLine; y++) {
+                for (let x = 0; x < this.screenWidth; x++) {
+                    // Create canopy texture based on view angle and position
+                    const viewAngle = player.angle + (x / this.screenWidth - 0.5) * 1.2;
+                    const pitchFactor = (horizonLine - y) / horizonLine;
+
+                    // Multi-layer wind movement
+                    const windOffset1 = time + windX;
+                    const windOffset2 = time * 1.3 + windY;
+
+                    const canopyX1 = Math.floor((viewAngle + windOffset1) * 6) % 12;
+                    const canopyY1 = Math.floor(pitchFactor * 3 + windOffset2) % 6;
+
+                    const canopyX2 = Math.floor((viewAngle + windOffset2 * 0.7) * 8) % 16;
+                    const canopyY2 = Math.floor(pitchFactor * 4) % 8;
+
+                    // Combine two noise layers for more organic movement
+                    const hash1 = this.hash2D(canopyX1, canopyY1);
+                    const hash2 = this.hash2D(canopyX2, canopyY2);
+                    const combinedHash = (hash1 + hash2) % 256;
+
+                    const density = (combinedHash % 5) + Math.floor(pitchFactor * 2);
+                    const charIndex = Math.min(density % canopyChars.length, canopyChars.length - 1);
+
+                    // Only draw if not empty space
+                    if (canopyChars[charIndex] !== ' ') {
+                        screenBuffer.setPixel(x, y, canopyChars[charIndex]);
+                    }
+                }
+            }
+        }
+
+        // Render simple falling leaves particle effect
+        renderFallingLeaves(player, screenBuffer) {
+            const leafChars = ['*', '•', '°', '·'];
+            const time = Date.now() * 0.001;
+
+            // Generate 3-5 leaves at random positions
+            for (let i = 0; i < 4; i++) {
+                // Create pseudo-random but consistent leaf positions
+                const leafSeed = Math.floor(time / 3) + i * 17; // Change every 3 seconds
+                const leafHash = this.hash2D(leafSeed, i);
+
+                // Only show leaf 20% of the time (sparse effect)
+                if (leafHash % 5 !== 0) continue;
+
+                // Leaf position relative to player view
+                const leafX = (leafHash % 100) / 100; // 0-1 across screen
+                const leafY = ((leafHash >> 8) % 60) / 100; // 0-0.6 down screen
+                const fallSpeed = 0.1 + (leafHash % 3) * 0.05; // Varying fall speeds
+
+                // Animate falling
+                const fallOffset = (time * fallSpeed) % 1;
+                const screenX = Math.floor(leafX * this.screenWidth);
+                const screenY = Math.floor((leafY + fallOffset) * this.screenHeight * 0.7);
+
+                // Add gentle horizontal drift
+                const driftOffset = Math.sin(time * 0.5 + i) * 2;
+                const finalX = Math.floor(screenX + driftOffset);
+
+                // Only draw if in bounds and not over UI areas
+                if (finalX >= 0 && finalX < this.screenWidth &&
+                    screenY >= 0 && screenY < this.screenHeight - 12) {
+
+                    const leafChar = leafChars[leafHash % leafChars.length];
+
+                    // Don't overwrite solid characters (trees, walls)
+                    const currentChar = screenBuffer.getPixel(finalX, screenY);
+                    if (currentChar === ' ' || currentChar === '.' || currentChar === ':') {
+                        screenBuffer.setPixel(finalX, screenY, leafChar);
+                    }
+                }
+            }
+        }
+
+        // Render enhanced POV hands (20x10 size)
+        renderPOVHands(player, screenBuffer) {
+            const handWidth = 20;
+            const handHeight = 10;
+            const bottomMargin = 1;
+
+            // Calculate hand positions
+            const leftHandX = 2;
+            const rightHandX = this.screenWidth - handWidth - 2;
+            const handY = this.screenHeight - handHeight - bottomMargin;
+
+            // Enhanced hand animation based on movement
+            const isMoving = Math.abs(player.velocityX) > 0.1 || Math.abs(player.velocityY) > 0.1;
+            const bobSpeed = isMoving ? 0.02 : 0.005;
+            const bobAmount = isMoving ? 2 : 0.5;
+            const swayAmount = isMoving ? 1 : 0;
+
+            const time = Date.now();
+            const bobOffset = Math.floor(Math.sin(time * bobSpeed) * bobAmount);
+            const swayOffset = Math.floor(Math.sin(time * bobSpeed * 1.3) * swayAmount);
+
+            const finalHandY = handY + bobOffset;
+
+            // Check for nearby trees for branch-push gesture
+            const nearbyTrees = worldModel?.spatialHash?.getTreesInCell(player.x, player.y) || [];
+            let showPushGesture = false;
+
+            for (const tree of nearbyTrees) {
+                const dx = tree.x - player.x;
+                const dy = tree.y - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Check if tree is in front of player and close
+                const angle = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(angle - player.angle);
+
+                if (distance < 1.2 && angleDiff < 0.5) {
+                    showPushGesture = true;
+                    break;
+                }
+            }
+
+            // Choose hand pose
+            let leftHand, rightHand;
+
+            if (showPushGesture) {
+                // Push gesture - hands forward
+                leftHand = [
+                    "      ▄▄▄▄▄▄▄       ",
+                    "    ▄███████████▄   ",
+                    "   ████████████████ ",
+                    "  ██████████████████",
+                    " ████████████████▀▀▀",
+                    "████████████▀▀      ",
+                    "██████████▀         ",
+                    "████████▀           ",
+                    "██████▀             ",
+                    "████▀               "
+                ];
+
+                rightHand = [
+                    "       ▄▄▄▄▄▄▄      ",
+                    "   ▄███████████▄    ",
+                    " ████████████████   ",
+                    "██████████████████  ",
+                    "▀▀▀████████████████ ",
+                    "      ▀▀████████████",
+                    "         ▀██████████",
+                    "           ▀████████",
+                    "             ▀██████",
+                    "               ▀████"
+                ];
+            } else if (isMoving) {
+                // Walking sway - hands swinging
+                leftHand = [
+                    "     ▄▄▄▄▄          ",
+                    "   ▄████████▄       ",
+                    "  ███████████████   ",
+                    " █████████████████  ",
+                    "███████████████▀▀   ",
+                    "█████████▀▀▀        ",
+                    "███████▀            ",
+                    "█████▀              ",
+                    "███▀                ",
+                    "█▀                  "
+                ];
+
+                rightHand = [
+                    "          ▄▄▄▄▄     ",
+                    "       ▄████████▄   ",
+                    "   ███████████████  ",
+                    "  █████████████████ ",
+                    "   ▀▀███████████████",
+                    "        ▀▀▀█████████",
+                    "            ▀███████",
+                    "              ▀█████",
+                    "                ▀███",
+                    "                  ▀█"
+                ];
+            } else {
+                // Idle pose - relaxed hands
+                leftHand = [
+                    "     ▄▄▄▄           ",
+                    "   ▄███████▄        ",
+                    "  ██████████████    ",
+                    " ████████████████   ",
+                    "██████████████▀▀    ",
+                    "████████▀▀          ",
+                    "██████▀             ",
+                    "████▀               ",
+                    "██▀                 ",
+                    "▀                   "
+                ];
+
+                rightHand = [
+                    "           ▄▄▄▄     ",
+                    "        ▄███████▄   ",
+                    "    ██████████████  ",
+                    "   ████████████████ ",
+                    "    ▀▀██████████████",
+                    "          ▀▀████████",
+                    "             ▀██████",
+                    "               ▀████",
+                    "                 ▀██",
+                    "                   ▀"
+                ];
+            }
+
+            // Draw left hand with sway
+            for (let y = 0; y < leftHand.length && finalHandY + y < this.screenHeight; y++) {
+                for (let x = 0; x < leftHand[y].length && leftHandX + x + swayOffset < this.screenWidth; x++) {
+                    const char = leftHand[y][x];
+                    const drawX = leftHandX + x + swayOffset;
+                    const drawY = finalHandY + y;
+
+                    if (char !== ' ' && drawY >= 0 && drawX >= 0 && drawX < this.screenWidth) {
+                        screenBuffer.setPixel(drawX, drawY, char);
                     }
                 }
             }
 
-            // Render sprites (simplified)
-            renderSprites(player, world, asciiMapper, screenBuffer) {
-                const objects = world.getObjects();
-                const sprites = [];
+            // Draw right hand with opposite sway
+            for (let y = 0; y < rightHand.length && finalHandY + y < this.screenHeight; y++) {
+                for (let x = 0; x < rightHand[y].length && rightHandX + x - swayOffset >= 0; x++) {
+                    const char = rightHand[y][x];
+                    const drawX = rightHandX + x - swayOffset;
+                    const drawY = finalHandY + y;
 
-                // Create and project sprites
-                for (const obj of objects) {
-                    const sprite = new Sprite(obj);
-                    sprite.calculateProjection(player, this.screenWidth, this.screenHeight, this.fov);
-                    if (sprite.visible && sprite.isOnScreen(this.screenWidth, this.screenHeight)) {
-                        sprites.push(sprite);
+                    if (char !== ' ' && drawY >= 0 && drawX >= 0 && drawX < this.screenWidth) {
+                        screenBuffer.setPixel(drawX, drawY, char);
                     }
                 }
+            }
+        }
 
-                // Sort by distance (far to near)
-                sprites.sort((a, b) => b.distance - a.distance);
+        // Render sprites (simplified)
+        renderSprites(player, world, asciiMapper, screenBuffer) {
+            const objects = world.getObjects();
+            const sprites = [];
 
-                // Draw sprites
-                for (const sprite of sprites) {
-                    const char = sprite.getCharacter(asciiMapper);
+            // Create and project sprites
+            for (const obj of objects) {
+                const sprite = new Sprite(obj);
+                sprite.calculateProjection(player, this.screenWidth, this.screenHeight, this.fov);
+                if (sprite.visible && sprite.isOnScreen(this.screenWidth, this.screenHeight)) {
+                    sprites.push(sprite);
+                }
+            }
 
-                    for (let x = sprite.drawStartX; x <= sprite.drawEndX; x++) {
-                        if (x >= 0 && x < this.screenWidth) {
-                            // Simple z-buffer check
-                            if (sprite.distance < this.rays[x].distance) {
-                                for (let y = sprite.drawStartY; y <= sprite.drawEndY; y++) {
-                                    if (y >= 0 && y < this.screenHeight) {
-                                        screenBuffer.setPixel(x, y, char);
-                                    }
+            // Sort by distance (far to near)
+            sprites.sort((a, b) => b.distance - a.distance);
+
+            // Draw sprites
+            for (const sprite of sprites) {
+                const char = sprite.getCharacter(asciiMapper);
+
+                for (let x = sprite.drawStartX; x <= sprite.drawEndX; x++) {
+                    if (x >= 0 && x < this.screenWidth) {
+                        // Simple z-buffer check
+                        if (sprite.distance < this.rays[x].distance) {
+                            for (let y = sprite.drawStartY; y <= sprite.drawEndY; y++) {
+                                if (y >= 0 && y < this.screenHeight) {
+                                    screenBuffer.setPixel(x, y, char);
                                 }
                             }
                         }
                     }
                 }
             }
+        }
         }
 
         // GameEngine class for main game loop and coordination
