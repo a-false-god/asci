@@ -1332,8 +1332,8 @@
                 this.objects = [];
                 this.spatialHash.clear();
 
-                // Generate trees using Poisson-disk sampling
-                const minSpacing = 1.8;
+                // Generate trees using Poisson-disk sampling (more spaced out)
+                const minSpacing = 3.2;
                 const maxTries = 30;
                 const trees = this.poissonDiskSampling(this.width, this.height, minSpacing, maxTries);
 
@@ -1355,29 +1355,13 @@
                     this.spatialHash.addTree(tree);
                 }
 
-                // Add diverse forest objects (logs, rocks, mushrooms, flowers)
+                // Add minimal forest objects for cleaner look
                 this.objects = [
-                    // Fallen logs
+                    // A few key objects only
                     { x: 15.2, y: 12.8, type: 'log', sprite: '═', size: 0.8 },
-                    { x: 28.7, y: 25.1, type: 'log', sprite: '║', size: 0.9 },
-                    { x: 6.3, y: 35.4, type: 'log', sprite: '═', size: 0.7 },
-
-                    // Rocks and boulders
                     { x: 25.1, y: 18.3, type: 'rock', sprite: '●', size: 0.6 },
                     { x: 35.7, y: 8.9, type: 'boulder', sprite: '◆', size: 1.0 },
-                    { x: 12.4, y: 30.7, type: 'rock', sprite: '○', size: 0.5 },
-                    { x: 33.2, y: 15.6, type: 'rock', sprite: '●', size: 0.4 },
-
-                    // Mushrooms and fungi
-                    { x: 8.5, y: 32.2, type: 'mushroom', sprite: '♠', size: 0.3 },
-                    { x: 18.9, y: 22.1, type: 'mushroom', sprite: '♣', size: 0.25 },
-                    { x: 31.6, y: 11.8, type: 'toadstool', sprite: '♠', size: 0.4 },
-
-                    // Forest flowers and plants
-                    { x: 22.3, y: 16.7, type: 'flower', sprite: '*', size: 0.2 },
-                    { x: 14.8, y: 28.9, type: 'flower', sprite: '✿', size: 0.2 },
-                    { x: 37.1, y: 19.4, type: 'bush', sprite: '※', size: 0.6 },
-                    { x: 9.7, y: 14.2, type: 'fern', sprite: '♦', size: 0.3 }
+                    { x: 8.5, y: 32.2, type: 'mushroom', sprite: '♠', size: 0.3 }
                 ];
 
                 // Create minimal walls (none for pure forest, could add cabin later)
@@ -2603,8 +2587,8 @@
                 // Render canopy (skybox)
                 this.renderCanopy(player, screenBuffer);
 
-                // Render falling leaves particle effect
-                this.renderFallingLeaves(player, screenBuffer);
+                // Render falling leaves particle effect (disabled for cleaner look)
+                // this.renderFallingLeaves(player, screenBuffer);
 
                 // Render enhanced POV hands
                 this.renderPOVHands(player, screenBuffer);
@@ -2813,22 +2797,22 @@
 
         // Get tree character with bark texture
         getTreeChar(distance, wallX) {
-            const palette = "██▓▓▒▒░░:.";
+            // Better contrast tree palette
+            const palette = "██▓▒░:. ";
 
-            // Distance-based character
-            let charIndex = Math.min(Math.floor(distance / 2), palette.length - 1);
+            // Distance-based character with better spacing
+            let charIndex = Math.min(Math.floor(distance / 1.5), palette.length - 1);
 
-            // Add bark texture variation
-            const barkPattern = Math.floor(wallX * 6) % 2;
+            // Subtle bark texture variation
+            const barkPattern = Math.floor(wallX * 4) % 2;
             if (barkPattern === 1 && charIndex > 0) {
                 charIndex = Math.max(0, charIndex - 1); // Slightly brighter for bark ridges
             }
 
-            // Distance fog - blend to lighter chars after 12 units
-            if (distance > 12) {
-                const fogFactor = Math.min((distance - 12) / 8, 1); // 0-1 over 8 units
-                const fogIndex = palette.length - 2; // Near lightest char
-                charIndex = Math.floor(charIndex + fogFactor * (fogIndex - charIndex));
+            // Distance fog - cleaner fade
+            if (distance > 10) {
+                const fogFactor = Math.min((distance - 10) / 6, 1);
+                charIndex = Math.floor(charIndex + fogFactor * 2); // Fade to lighter chars
             }
 
             return palette[Math.min(charIndex, palette.length - 1)];
@@ -2855,33 +2839,32 @@
 
         // Generate forest floor character with leaf litter texture
         getForestFloorChar(x, y, distance) {
-            const palette = ".:,;*xo%#@";
+            // Simpler, cleaner floor with better contrast
+            const palette = ".:,;*";
 
-            // Hash-based leaf litter texture
-            const ix = Math.floor(x * 4);
-            const iy = Math.floor(y * 4);
+            // Much simpler texture - less noise
+            const ix = Math.floor(x * 2);
+            const iy = Math.floor(y * 2);
             const hash = this.hash2D(ix, iy);
 
-            // Dappled light calculation (aligned to canopy gaps)
-            const lightX = Math.floor(x * 0.3);
-            const lightY = Math.floor(y * 0.3);
-            const windOffset = Math.floor(Date.now() * 0.0002); // Slow wind movement
-            const lightHash = this.hash2D(lightX + windOffset, lightY);
-            const lightIntensity = (lightHash % 5) / 4; // 0-1 light intensity
+            // Subtle dappled light patches
+            const lightX = Math.floor(x * 0.5);
+            const lightY = Math.floor(y * 0.5);
+            const lightHash = this.hash2D(lightX, lightY);
+            const isLightPatch = (lightHash % 8) < 2; // 25% light patches
 
-            // Base texture from leaf litter
-            let textureIndex = hash % palette.length;
+            // Base texture - much simpler
+            let textureIndex = hash % 3; // Only use first 3 chars for base
 
-            // Apply dappled lighting
-            const lightBoost = Math.floor(lightIntensity * 3); // 0-2 brightness boost
-            textureIndex = Math.max(0, textureIndex - lightBoost);
+            // Light patches use brighter chars
+            if (isLightPatch) {
+                textureIndex = Math.max(0, textureIndex - 1);
+            }
 
-            // Distance fog - fade to lighter chars
-            const distanceFactor = Math.min(distance / 12, 1);
-            if (distanceFactor > 0.8) {
-                // Far distance - blend to fog
-                const fogAmount = (distanceFactor - 0.8) * 5; // 0-1
-                textureIndex = Math.floor(textureIndex + fogAmount * (palette.length - textureIndex));
+            // Distance fog - fade to dots
+            const distanceFactor = Math.min(distance / 15, 1);
+            if (distanceFactor > 0.7) {
+                textureIndex = 0; // Far distance = dots only
             }
 
             return palette[Math.min(textureIndex, palette.length - 1)];
@@ -2899,7 +2882,7 @@
         // Render forest canopy as skybox
         renderCanopy(player, screenBuffer) {
             const horizonLine = player.getHorizonLine(this.screenHeight);
-            const canopyChars = "▓▒░ ";
+            const canopyChars = "▒░ . ";
 
             // Enhanced wind with multiple layers
             const time = Date.now() * 0.0001;
@@ -2928,12 +2911,15 @@
                     const hash2 = this.hash2D(canopyX2, canopyY2);
                     const combinedHash = (hash1 + hash2) % 256;
 
-                    const density = (combinedHash % 5) + Math.floor(pitchFactor * 2);
-                    const charIndex = Math.min(density % canopyChars.length, canopyChars.length - 1);
+                    // Make canopy much sparser - only show 30% of the time
+                    if (combinedHash % 10 < 3) {
+                        const density = (combinedHash % 3) + Math.floor(pitchFactor * 1);
+                        const charIndex = Math.min(density % canopyChars.length, canopyChars.length - 1);
 
-                    // Only draw if not empty space
-                    if (canopyChars[charIndex] !== ' ') {
-                        screenBuffer.setPixel(x, y, canopyChars[charIndex]);
+                        // Only draw if not empty space
+                        if (canopyChars[charIndex] !== ' ') {
+                            screenBuffer.setPixel(x, y, canopyChars[charIndex]);
+                        }
                     }
                 }
             }
