@@ -2,7 +2,7 @@
 
 A retro-style 3D room rendered entirely in ASCII characters using raycasting techniques similar to classic games like Doom and Wolfenstein 3D.
 
-## 🎮 [Play Online](https://yourusername.github.io/ascii-3d-room)
+## 🎮 [Play Online](https://a-false-god.github.io/asci/)
 
 ## Features
 
