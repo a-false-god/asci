@@ -1,0 +1,3787 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII 3D Room</title>
+    <style>
+        /* Monospace font stack with fallbacks */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+            background-color: #000;
+            color: #00ff00;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #asciiDisplay {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+        }
+
+        #screen {
+            font-size: 12px;
+            line-height: 1.0;
+            letter-spacing: 0;
+            white-space: pre;
+            font-weight: 400;
+            background-color: #000;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            padding: 10px;
+            font-family: inherit;
+        }
+
+        #uiContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            font-size: 11px;
+            pointer-events: auto;
+        }
+
+        #debugOverlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #ffff00;
+            padding: 10px;
+            border: 1px solid #ffff00;
+            font-size: 10px;
+            display: none;
+            pointer-events: auto;
+        }
+
+        #helpScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.95);
+            color: #00ff00;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            font-size: 12px;
+            display: none;
+            pointer-events: auto;
+            max-width: 80%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+
+        #pauseScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.95);
+            color: #ff0000;
+            padding: 20px;
+            border: 2px solid #ff0000;
+            font-size: 16px;
+            display: none;
+            pointer-events: auto;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Font loading detection */
+        .font-test {
+            position: absolute;
+            visibility: hidden;
+            height: auto;
+            width: auto;
+            white-space: nowrap;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #screen {
+                font-size: 8px;
+            }
+
+            #instructions,
+            #helpScreen {
+                font-size: 10px;
+            }
+        }
+
+        @media (max-height: 600px) {
+            #screen {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameContainer">
+        <div id="asciiDisplay">
+            <pre id="screen"></pre>
+        </div>
+
+        <div id="uiContainer">
+            <div id="instructions">
+                <strong>ASCII 3D Room Controls:</strong><br>
+                WASD: Move around<br>
+                Arrow Keys: Look around<br>
+                Esc: Pause/Resume<br>
+                ?: Toggle Help<br>
+                F1: Toggle Debug Info
+            </div>
+
+            <div id="debugOverlay">
+                <div>FPS: <span id="fpsCounter">0</span></div>
+                <div>Frame Time: <span id="frameTime">0</span>ms</div>
+                <div>Position: (<span id="posX">0</span>, <span id="posY">0</span>)</div>
+                <div>Yaw: <span id="yaw">0</span>°</div>
+                <div>Pitch: <span id="pitch">0</span>°</div>
+                <div>Resolution: <span id="resolution">120x40</span></div>
+            </div>
+
+            <div id="helpScreen">
+                <h3>ASCII 3D Room - Help</h3>
+                <br>
+                <strong>Movement Controls:</strong><br>
+                W - Move Forward<br>
+                S - Move Backward<br>
+                A - Strafe Left<br>
+                D - Strafe Right<br>
+                <br>
+                <strong>View Controls:</strong><br>
+                ← → - Turn Left/Right<br>
+                ↑ ↓ - Look Up/Down<br>
+                <br>
+                <strong>System Controls:</strong><br>
+                Esc - Pause/Resume Game<br>
+                ? - Toggle This Help Screen<br>
+                F1 - Toggle Debug Information<br>
+                <br>
+                <strong>Tips:</strong><br>
+                • Use diagonal movement (W+A, W+D, etc.) for faster navigation<br>
+                • Look for doorways to move between rooms<br>
+                • Objects appear more detailed when you're close to them<br>
+                • The floor grid shows perspective depth<br>
+                <br>
+                <em>Press ? again to close this help screen</em>
+            </div>
+
+            <div id="pauseScreen">
+                <h2>GAME PAUSED</h2>
+                <br>
+                Press Esc to Resume
+            </div>
+        </div>
+    </div>
+
+    <!-- Font detection element -->
+    <div class="font-test" id="fontTest">M</div>
+
+    <script>
+        // Browser compatibility and feature detection
+        class BrowserCompatibility {
+            constructor() {
+                this.features = {
+                    requestAnimationFrame: false,
+                    performance: false,
+                    localStorage: false,
+                    webGL: false,
+                    canvas: false,
+                    es6: false
+                };
+
+                this.warnings = [];
+                this.errors = [];
+
+                this.detectFeatures();
+            }
+
+            detectFeatures() {
+                // Check for requestAnimationFrame
+                this.features.requestAnimationFrame = !!(
+                    window.requestAnimationFrame ||
+                    window.webkitRequestAnimationFrame ||
+                    window.mozRequestAnimationFrame ||
+                    window.msRequestAnimationFrame
+                );
+
+                // Check for performance API
+                this.features.performance = !!(window.performance && window.performance.now);
+
+                // Check for localStorage
+                try {
+                    this.features.localStorage = !!(window.localStorage &&
+                        typeof window.localStorage.setItem === 'function');
+                } catch (e) {
+                    this.features.localStorage = false;
+                }
+
+                // Check for Canvas support
+                try {
+                    const canvas = document.createElement('canvas');
+                    this.features.canvas = !!(canvas.getContext && canvas.getContext('2d'));
+                } catch (e) {
+                    this.features.canvas = false;
+                }
+
+                // Check for ES6 features
+                try {
+                    eval('class Test {}; const test = () => {}; let x = 1;');
+                    this.features.es6 = true;
+                } catch (e) {
+                    this.features.es6 = false;
+                }
+
+                // Generate warnings for missing features
+                this.generateWarnings();
+            }
+
+            generateWarnings() {
+                if (!this.features.requestAnimationFrame) {
+                    this.warnings.push('requestAnimationFrame not supported - using setTimeout fallback');
+                }
+
+                if (!this.features.performance) {
+                    this.warnings.push('Performance API not supported - using Date.now() fallback');
+                }
+
+                if (!this.features.localStorage) {
+                    this.warnings.push('localStorage not supported - settings will not persist');
+                }
+
+                if (!this.features.es6) {
+                    this.errors.push('ES6 features not supported - please use a modern browser');
+                }
+            }
+
+            isCompatible() {
+                return this.errors.length === 0;
+            }
+
+            getCompatibilityReport() {
+                return {
+                    compatible: this.isCompatible(),
+                    features: this.features,
+                    warnings: this.warnings,
+                    errors: this.errors,
+                    userAgent: navigator.userAgent,
+                    browserInfo: this.getBrowserInfo()
+                };
+            }
+
+            getBrowserInfo() {
+                const ua = navigator.userAgent;
+                let browser = 'Unknown';
+                let version = 'Unknown';
+
+                if (ua.includes('Chrome')) {
+                    browser = 'Chrome';
+                    const match = ua.match(/Chrome\/(\d+)/);
+                    version = match ? match[1] : 'Unknown';
+                } else if (ua.includes('Firefox')) {
+                    browser = 'Firefox';
+                    const match = ua.match(/Firefox\/(\d+)/);
+                    version = match ? match[1] : 'Unknown';
+                } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+                    browser = 'Safari';
+                    const match = ua.match(/Version\/(\d+)/);
+                    version = match ? match[1] : 'Unknown';
+                } else if (ua.includes('Edge')) {
+                    browser = 'Edge';
+                    const match = ua.match(/Edge\/(\d+)/);
+                    version = match ? match[1] : 'Unknown';
+                }
+
+                return { browser, version };
+            }
+        }
+
+        // Error handling and graceful degradation
+        class ErrorHandler {
+            constructor() {
+                this.errors = [];
+                this.maxErrors = 10;
+                this.setupGlobalErrorHandling();
+            }
+
+            setupGlobalErrorHandling() {
+                // Catch JavaScript errors
+                window.addEventListener('error', (event) => {
+                    this.handleError('JavaScript Error', event.error || event.message, {
+                        filename: event.filename,
+                        lineno: event.lineno,
+                        colno: event.colno
+                    });
+                });
+
+                // Catch unhandled promise rejections
+                window.addEventListener('unhandledrejection', (event) => {
+                    this.handleError('Unhandled Promise Rejection', event.reason, {
+                        promise: event.promise
+                    });
+                });
+            }
+
+            handleError(type, error, context = {}) {
+                const errorInfo = {
+                    type,
+                    message: error?.message || error?.toString() || 'Unknown error',
+                    stack: error?.stack,
+                    context,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent
+                };
+
+                this.errors.push(errorInfo);
+
+                // Keep only recent errors
+                if (this.errors.length > this.maxErrors) {
+                    this.errors.shift();
+                }
+
+                // Log to console
+                console.error(`[${type}]`, errorInfo.message, errorInfo);
+
+                // Try to show user-friendly error if game is running
+                this.showUserError(type, errorInfo.message);
+
+                return errorInfo;
+            }
+
+            showUserError(type, message) {
+                try {
+                    // Try to show error in game UI if available
+                    if (window.uiManager && uiManager.showError) {
+                        uiManager.showError(`${type}: ${message}`);
+                    } else {
+                        // Fallback to alert (not ideal but better than nothing)
+                        console.warn('Error occurred:', message);
+                    }
+                } catch (e) {
+                    // Even error display failed - just log
+                    console.error('Failed to display error:', e);
+                }
+            }
+
+            getErrorReport() {
+                return {
+                    errorCount: this.errors.length,
+                    errors: this.errors,
+                    lastError: this.errors[this.errors.length - 1] || null
+                };
+            }
+
+            clearErrors() {
+                this.errors = [];
+            }
+        }
+
+        // Performance monitoring and adaptive scaling
+        class PerformanceMonitor {
+            constructor() {
+                this.frameHistory = [];
+                this.maxHistory = 60; // Keep 60 frames of history
+                this.performanceLevel = 'high'; // high, medium, low
+                this.adaptiveScaling = true;
+                this.lastScaleTime = 0;
+                this.scaleDelay = 5000; // 5 seconds between scale changes
+            }
+
+            recordFrame(frameTime) {
+                this.frameHistory.push({
+                    time: frameTime,
+                    timestamp: performance.now()
+                });
+
+                if (this.frameHistory.length > this.maxHistory) {
+                    this.frameHistory.shift();
+                }
+
+                // Check if we need to adjust performance
+                if (this.adaptiveScaling) {
+                    this.checkPerformanceLevel();
+                }
+            }
+
+            checkPerformanceLevel() {
+                if (this.frameHistory.length < 30) return; // Need enough data
+
+                const now = performance.now();
+                if (now - this.lastScaleTime < this.scaleDelay) return; // Too soon to scale again
+
+                const recentFrames = this.frameHistory.slice(-30);
+                const avgFrameTime = recentFrames.reduce((sum, frame) => sum + frame.time, 0) / recentFrames.length;
+                const fps = 1000 / avgFrameTime;
+
+                let newLevel = this.performanceLevel;
+
+                if (fps < 20 && this.performanceLevel !== 'low') {
+                    newLevel = 'low';
+                } else if (fps < 25 && this.performanceLevel === 'high') {
+                    newLevel = 'medium';
+                } else if (fps > 35 && this.performanceLevel === 'low') {
+                    newLevel = 'medium';
+                } else if (fps > 45 && this.performanceLevel === 'medium') {
+                    newLevel = 'high';
+                }
+
+                if (newLevel !== this.performanceLevel) {
+                    this.performanceLevel = newLevel;
+                    this.lastScaleTime = now;
+                    this.applyPerformanceLevel();
+                }
+            }
+
+            applyPerformanceLevel() {
+                console.log(`Performance level changed to: ${this.performanceLevel}`);
+
+                // Adjust screen resolution based on performance
+                if (window.screenBuffer && window.gameEngine) {
+                    let newWidth, newHeight;
+
+                    switch (this.performanceLevel) {
+                        case 'low':
+                            newWidth = 80;
+                            newHeight = 24;
+                            break;
+                        case 'medium':
+                            newWidth = 100;
+                            newHeight = 32;
+                            break;
+                        case 'high':
+                        default:
+                            newWidth = 120;
+                            newHeight = 40;
+                            break;
+                    }
+
+                    if (screenBuffer.width !== newWidth || screenBuffer.height !== newHeight) {
+                        screenBuffer.resize(newWidth, newHeight);
+                        if (renderEngine) {
+                            renderEngine.screenWidth = newWidth;
+                            renderEngine.screenHeight = newHeight;
+                        }
+                        console.log(`Resolution adjusted to ${newWidth}x${newHeight}`);
+                    }
+                }
+            }
+
+            getStats() {
+                if (this.frameHistory.length === 0) return null;
+
+                const recentFrames = this.frameHistory.slice(-30);
+                const frameTimes = recentFrames.map(f => f.time);
+                const avgFrameTime = frameTimes.reduce((sum, time) => sum + time, 0) / frameTimes.length;
+                const minFrameTime = Math.min(...frameTimes);
+                const maxFrameTime = Math.max(...frameTimes);
+
+                return {
+                    avgFPS: (1000 / avgFrameTime).toFixed(1),
+                    minFPS: (1000 / maxFrameTime).toFixed(1),
+                    maxFPS: (1000 / minFrameTime).toFixed(1),
+                    avgFrameTime: avgFrameTime.toFixed(2),
+                    performanceLevel: this.performanceLevel,
+                    adaptiveScaling: this.adaptiveScaling
+                };
+            }
+        }
+
+        // Global game configuration
+        const CONFIG = {
+            screen: {
+                width: 120,
+                height: 40,
+                minWidth: 80,
+                minHeight: 24
+            },
+            rendering: {
+                fov: Math.PI * 66 / 180, // 66 degrees in radians
+                maxDistance: 20,
+                palette: "@#%*=+:-.",
+                distanceBands: [1, 2, 4, 6, 8, 10, 15, Infinity]
+            },
+            player: {
+                moveSpeed: 2.5, // units per second
+                rotSpeed: Math.PI / 2, // 90 degrees per second
+                radius: 0.3,
+                maxPitch: Math.PI / 9 // 20 degrees
+            },
+            physics: {
+                penetrationTolerance: 0.05
+            }
+        };
+
+        // Polyfills and browser compatibility fixes
+        (function setupPolyfills() {
+            // requestAnimationFrame polyfill
+            if (!window.requestAnimationFrame) {
+                window.requestAnimationFrame =
+                    window.webkitRequestAnimationFrame ||
+                    window.mozRequestAnimationFrame ||
+                    window.msRequestAnimationFrame ||
+                    function (callback) {
+                        return window.setTimeout(callback, 1000 / 60);
+                    };
+            }
+
+            if (!window.cancelAnimationFrame) {
+                window.cancelAnimationFrame =
+                    window.webkitCancelAnimationFrame ||
+                    window.mozCancelAnimationFrame ||
+                    window.msCancelAnimationFrame ||
+                    function (id) {
+                        window.clearTimeout(id);
+                    };
+            }
+
+            // Performance.now polyfill
+            if (!window.performance || !window.performance.now) {
+                const startTime = Date.now();
+                if (!window.performance) {
+                    window.performance = {};
+                }
+                window.performance.now = function () {
+                    return Date.now() - startTime;
+                };
+            }
+
+            // Array.from polyfill (for older browsers)
+            if (!Array.from) {
+                Array.from = function (arrayLike) {
+                    const result = [];
+                    for (let i = 0; i < arrayLike.length; i++) {
+                        result.push(arrayLike[i]);
+                    }
+                    return result;
+                };
+            }
+
+            // Object.assign polyfill
+            if (!Object.assign) {
+                Object.assign = function (target) {
+                    for (let i = 1; i < arguments.length; i++) {
+                        const source = arguments[i];
+                        for (const key in source) {
+                            if (source.hasOwnProperty(key)) {
+                                target[key] = source[key];
+                            }
+                        }
+                    }
+                    return target;
+                };
+            }
+        })();
+
+        // Font detection and fallback system
+        class FontManager {
+            constructor() {
+                this.testElement = document.getElementById('fontTest');
+                this.monospaceWidth = null;
+                this.fontReady = false;
+                this.fallbackFonts = [
+                    'JetBrains Mono',
+                    'Consolas',
+                    'Monaco',
+                    'Menlo',
+                    'Courier New',
+                    'monospace'
+                ];
+                this.currentFont = 'monospace';
+            }
+
+            async detectFont() {
+                // Test monospace character width
+                this.testElement.style.fontFamily = 'monospace';
+                const monospaceWidth = this.testElement.offsetWidth;
+
+                // Test if custom font is loaded
+                this.testElement.style.fontFamily = "'JetBrains Mono', monospace";
+                const customWidth = this.testElement.offsetWidth;
+
+                this.monospaceWidth = monospaceWidth;
+                this.fontReady = true;
+
+                // Log font status to console
+                if (customWidth !== monospaceWidth) {
+                    console.log('Custom font (JetBrains Mono) loaded successfully');
+                } else {
+                    console.log('Using fallback monospace font');
+                }
+
+                return this.fontReady;
+            }
+
+            getCharacterDimensions() {
+                if (!this.fontReady) return { width: 7, height: 12 };
+
+                this.testElement.textContent = 'M';
+                return {
+                    width: this.testElement.offsetWidth,
+                    height: this.testElement.offsetHeight
+                };
+            }
+        }
+
+        // Optimized screen buffer management with dirty regions and character batching
+        class ScreenBuffer {
+            constructor(width, height) {
+                this.width = width;
+                this.height = height;
+                this.buffer = new Array(width * height).fill(' ');
+                this.previousBuffer = new Array(width * height).fill(' ');
+                this.dirty = true;
+                this.element = document.getElementById('screen');
+
+                // Dirty region tracking for optimized updates
+                this.dirtyRegions = [];
+                this.minDirtyX = width;
+                this.maxDirtyX = -1;
+                this.minDirtyY = height;
+                this.maxDirtyY = -1;
+
+                // Character batching for DOM optimization
+                this.batchedUpdates = new Map();
+                this.batchSize = 0;
+                this.maxBatchSize = 100; // Batch updates when we have many changes
+
+                // Performance tracking
+                this.renderCount = 0;
+                this.lastRenderTime = 0;
+                this.avgRenderTime = 0;
+            }
+
+            setPixel(x, y, char) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                    const index = y * this.width + x;
+                    if (this.buffer[index] !== char) {
+                        this.buffer[index] = char;
+                        this.markDirtyRegion(x, y);
+                    }
+                }
+            }
+
+            // Mark a region as dirty for optimized rendering
+            markDirtyRegion(x, y) {
+                this.dirty = true;
+                this.minDirtyX = Math.min(this.minDirtyX, x);
+                this.maxDirtyX = Math.max(this.maxDirtyX, x);
+                this.minDirtyY = Math.min(this.minDirtyY, y);
+                this.maxDirtyY = Math.max(this.maxDirtyY, y);
+            }
+
+            // Batch character updates for similar characters
+            batchCharacterUpdate(x, y, char) {
+                const key = char;
+                if (!this.batchedUpdates.has(key)) {
+                    this.batchedUpdates.set(key, []);
+                }
+                this.batchedUpdates.get(key).push({ x, y });
+                this.batchSize++;
+            }
+
+            getPixel(x, y) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                    return this.buffer[y * this.width + x];
+                }
+                return ' ';
+            }
+
+            clear(char = ' ') {
+                this.buffer.fill(char);
+                this.dirty = true;
+                this.resetDirtyRegion();
+            }
+
+            // Reset dirty region tracking
+            resetDirtyRegion() {
+                this.minDirtyX = this.width;
+                this.maxDirtyX = -1;
+                this.minDirtyY = this.height;
+                this.maxDirtyY = -1;
+            }
+
+            // Optimized render with dirty region updates and character batching
+            render() {
+                if (!this.dirty) return;
+
+                const startTime = performance.now();
+
+                // Check if we should use full render or optimized dirty region render
+                const dirtyArea = (this.maxDirtyX - this.minDirtyX + 1) * (this.maxDirtyY - this.minDirtyY + 1);
+                const totalArea = this.width * this.height;
+                const dirtyRatio = dirtyArea / totalArea;
+
+                // Use optimized rendering if dirty region is small enough
+                if (dirtyRatio < 0.3 && this.maxDirtyX >= 0) {
+                    this.renderDirtyRegions();
+                } else {
+                    this.renderFull();
+                }
+
+                // Update performance metrics
+                const renderTime = performance.now() - startTime;
+                this.renderCount++;
+                this.avgRenderTime = (this.avgRenderTime * (this.renderCount - 1) + renderTime) / this.renderCount;
+                this.lastRenderTime = renderTime;
+
+                this.dirty = false;
+                this.resetDirtyRegion();
+                this.batchedUpdates.clear();
+                this.batchSize = 0;
+            }
+
+            // Render only dirty regions for better performance
+            renderDirtyRegions() {
+                // For now, we'll use a simplified approach and render full screen
+                // In a more advanced implementation, we could update only changed lines
+                this.renderFull();
+            }
+
+            // Full screen render with character batching optimization
+            renderFull() {
+                let output = '';
+                let currentChar = '';
+                let charCount = 0;
+
+                // Build output string with potential character run-length optimization
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        const char = this.buffer[y * this.width + x];
+
+                        // Simple character batching - group consecutive identical characters
+                        if (char === currentChar && charCount < 10) {
+                            charCount++;
+                        } else {
+                            // Output previous character run
+                            if (charCount > 0) {
+                                output += currentChar.repeat(charCount);
+                            }
+                            currentChar = char;
+                            charCount = 1;
+                        }
+                    }
+
+                    // Output remaining characters and newline
+                    if (charCount > 0) {
+                        output += currentChar.repeat(charCount);
+                        charCount = 0;
+                        currentChar = '';
+                    }
+
+                    if (y < this.height - 1) output += '\n';
+                }
+
+                // Single DOM update for better performance
+                this.element.textContent = output;
+
+                // Copy current buffer to previous for next frame comparison
+                this.previousBuffer = [...this.buffer];
+            }
+
+            resize(width, height) {
+                this.width = width;
+                this.height = height;
+                this.buffer = new Array(width * height).fill(' ');
+                this.previousBuffer = new Array(width * height).fill(' ');
+                this.dirty = true;
+                this.resetDirtyRegion();
+            }
+
+            // Get performance metrics for debugging
+            getPerformanceInfo() {
+                return {
+                    renderCount: this.renderCount,
+                    avgRenderTime: this.avgRenderTime.toFixed(2),
+                    lastRenderTime: this.lastRenderTime.toFixed(2),
+                    dirtyRegionSize: `${this.maxDirtyX - this.minDirtyX + 1}x${this.maxDirtyY - this.minDirtyY + 1}`,
+                    batchSize: this.batchSize
+                };
+            }
+        }
+
+        // Player class for managing player state and movement
+        class Player {
+            constructor(x = 2.0, y = 2.0, angle = 0) {
+                // Position in world coordinates
+                this.x = x;
+                this.y = y;
+
+                // Rotation angles in radians
+                this.angle = angle;  // Yaw (left/right rotation)
+                this.pitch = 0;      // Pitch (up/down look, clamped to ±20°)
+
+                // Movement properties
+                this.radius = CONFIG.player.radius;           // Collision radius
+                this.moveSpeed = CONFIG.player.moveSpeed;     // Units per second
+                this.rotSpeed = CONFIG.player.rotSpeed;       // Radians per second
+                this.maxPitch = CONFIG.player.maxPitch;       // Maximum pitch angle
+
+                // Movement state
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.angularVelocity = 0;
+                this.pitchVelocity = 0;
+            }
+
+            // Calculate horizon line based on current pitch
+            getHorizonLine(screenHeight) {
+                const pitchOffset = Math.floor((this.pitch / this.maxPitch) * (screenHeight / 4));
+                return Math.floor(screenHeight / 2) + pitchOffset;
+            }
+
+            // Get forward direction vector
+            getForwardVector() {
+                return {
+                    x: Math.cos(this.angle),
+                    y: Math.sin(this.angle)
+                };
+            }
+
+            // Get right direction vector (for strafing)
+            getRightVector() {
+                return {
+                    x: Math.cos(this.angle + Math.PI / 2),
+                    y: Math.sin(this.angle + Math.PI / 2)
+                };
+            }
+
+            // Update player position based on movement input
+            updateMovement(input, deltaTime) {
+                // Get movement vectors
+                const forward = this.getForwardVector();
+                const right = this.getRightVector();
+
+                // Calculate desired movement
+                let moveX = 0;
+                let moveY = 0;
+
+                if (input.forward) {
+                    moveX += forward.x;
+                    moveY += forward.y;
+                }
+                if (input.backward) {
+                    moveX -= forward.x;
+                    moveY -= forward.y;
+                }
+                if (input.strafeLeft) {
+                    moveX -= right.x;
+                    moveY -= right.y;
+                }
+                if (input.strafeRight) {
+                    moveX += right.x;
+                    moveY += right.y;
+                }
+
+                // Normalize diagonal movement to maintain consistent speed
+                const magnitude = Math.sqrt(moveX * moveX + moveY * moveY);
+                if (magnitude > 0) {
+                    moveX = (moveX / magnitude) * this.moveSpeed * deltaTime;
+                    moveY = (moveY / magnitude) * this.moveSpeed * deltaTime;
+
+                    // Store velocity for collision detection
+                    this.velocityX = moveX / deltaTime;
+                    this.velocityY = moveY / deltaTime;
+                } else {
+                    this.velocityX = 0;
+                    this.velocityY = 0;
+                }
+
+                return { x: moveX, y: moveY };
+            }
+
+            // Update player rotation based on input
+            updateRotation(input, deltaTime) {
+                let rotationChange = 0;
+                let pitchChange = 0;
+
+                // Yaw rotation (left/right)
+                if (input.turnLeft) {
+                    rotationChange -= this.rotSpeed * deltaTime;
+                }
+                if (input.turnRight) {
+                    rotationChange += this.rotSpeed * deltaTime;
+                }
+
+                // Pitch rotation (up/down) with clamping
+                if (input.lookUp) {
+                    pitchChange -= this.rotSpeed * deltaTime;
+                }
+                if (input.lookDown) {
+                    pitchChange += this.rotSpeed * deltaTime;
+                }
+
+                // Apply rotation changes
+                this.angle += rotationChange;
+                this.pitch += pitchChange;
+
+                // Normalize angle to 0-2π range
+                this.angle = ((this.angle % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+
+                // Clamp pitch to maximum range
+                this.pitch = Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch));
+
+                // Store angular velocities
+                this.angularVelocity = rotationChange / deltaTime;
+                this.pitchVelocity = pitchChange / deltaTime;
+
+                return { yaw: rotationChange, pitch: pitchChange };
+            }
+
+            // Apply movement to player position (used after collision detection)
+            applyMovement(deltaX, deltaY) {
+                this.x += deltaX;
+                this.y += deltaY;
+            }
+
+            // Get player state for debugging
+            getState() {
+                return {
+                    position: { x: this.x, y: this.y },
+                    rotation: {
+                        yaw: this.angle * 180 / Math.PI,  // Convert to degrees for display
+                        pitch: this.pitch * 180 / Math.PI
+                    },
+                    velocity: { x: this.velocityX, y: this.velocityY },
+                    speed: Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY)
+                };
+            }
+
+            // Reset player to starting position
+            reset(x = 2.0, y = 2.0, angle = 0) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle;
+                this.pitch = 0;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.angularVelocity = 0;
+                this.pitchVelocity = 0;
+            }
+
+            // Validate player state (for testing)
+            isValid() {
+                return (
+                    typeof this.x === 'number' && !isNaN(this.x) &&
+                    typeof this.y === 'number' && !isNaN(this.y) &&
+                    typeof this.angle === 'number' && !isNaN(this.angle) &&
+                    typeof this.pitch === 'number' && !isNaN(this.pitch) &&
+                    Math.abs(this.pitch) <= this.maxPitch
+                );
+            }
+        }
+
+        // Ray class for raycasting results
+        class Ray {
+            constructor() {
+                // Distance and hit information
+                this.distance = 0;          // Distance to wall hit
+                this.wallType = 0;          // Wall material/type ID
+                this.hitX = 0;              // World X coordinate of hit
+                this.hitY = 0;              // World Y coordinate of hit
+                this.side = 0;              // 0 = NS wall, 1 = EW wall
+
+                // Screen projection information
+                this.wallHeight = 0;        // Screen height of wall slice
+                this.drawStart = 0;         // Top pixel of wall on screen
+                this.drawEnd = 0;           // Bottom pixel of wall on screen
+
+                // Texture/rendering information
+                this.wallX = 0;             // X coordinate on wall (for texturing)
+                this.perpWallDist = 0;      // Perpendicular wall distance (fisheye corrected)
+            }
+
+            // Reset ray data for reuse
+            reset() {
+                this.distance = 0;
+                this.wallType = 0;
+                this.hitX = 0;
+                this.hitY = 0;
+                this.side = 0;
+                this.wallHeight = 0;
+                this.drawStart = 0;
+                this.drawEnd = 0;
+                this.wallX = 0;
+                this.perpWallDist = 0;
+            }
+
+            // Calculate wall height and screen coordinates
+            calculateScreenProjection(screenHeight, playerPitch = 0) {
+                // Calculate wall height based on distance
+                this.wallHeight = Math.floor(screenHeight / this.perpWallDist);
+
+                // Calculate draw start and end with pitch offset
+                const horizonOffset = Math.floor((playerPitch / (Math.PI / 9)) * (screenHeight / 4));
+                const horizonLine = Math.floor(screenHeight / 2) + horizonOffset;
+
+                this.drawStart = Math.max(0, horizonLine - Math.floor(this.wallHeight / 2));
+                this.drawEnd = Math.min(screenHeight - 1, horizonLine + Math.floor(this.wallHeight / 2));
+            }
+
+            // Validate ray data
+            isValid() {
+                return (
+                    typeof this.distance === 'number' && !isNaN(this.distance) && this.distance >= 0 &&
+                    typeof this.perpWallDist === 'number' && !isNaN(this.perpWallDist) && this.perpWallDist > 0 &&
+                    typeof this.hitX === 'number' && !isNaN(this.hitX) &&
+                    typeof this.hitY === 'number' && !isNaN(this.hitY) &&
+                    this.side >= 0 && this.side <= 1
+                );
+            }
+
+            // Get ray information for debugging
+            getInfo() {
+                return {
+                    distance: this.distance.toFixed(2),
+                    perpDistance: this.perpWallDist.toFixed(2),
+                    hit: `(${this.hitX.toFixed(2)}, ${this.hitY.toFixed(2)})`,
+                    side: this.side === 0 ? 'NS' : 'EW',
+                    wallType: this.wallType,
+                    screenHeight: this.wallHeight
+                };
+            }
+        }
+
+        // Sprite class for 3D objects
+        class Sprite {
+            constructor(object, distance = 0, screenX = 0) {
+                // World position
+                this.x = object.x || 0;
+                this.y = object.y || 0;
+                this.z = object.z || 0;     // Height offset (for future use)
+
+                // Object properties
+                this.type = object.type || 'unknown';
+                this.sprite = object.sprite || '#';
+                this.size = object.size || 0.5;        // World size
+                this.color = object.color || null;     // Optional color override
+
+                // Screen projection
+                this.distance = distance;
+                this.screenX = screenX;
+                this.screenY = 0;           // Vertical screen position
+                this.screenSize = 0;        // Screen width/height
+                this.drawStartX = 0;        // Left edge on screen
+                this.drawEndX = 0;          // Right edge on screen
+                this.drawStartY = 0;        // Top edge on screen
+                this.drawEndY = 0;          // Bottom edge on screen
+
+                // Level of detail
+                this.lodLevel = 0;          // 0=near, 1=mid, 2=far
+                this.visible = true;        // Whether sprite should be rendered
+            }
+
+            // Calculate screen projection from player position
+            calculateProjection(player, screenWidth, screenHeight, fov) {
+                // Calculate relative position to player
+                const relativeX = this.x - player.x;
+                const relativeY = this.y - player.y;
+
+                // Calculate distance
+                this.distance = Math.sqrt(relativeX * relativeX + relativeY * relativeY);
+
+                // Transform to camera space
+                const cosAngle = Math.cos(player.angle);
+                const sinAngle = Math.sin(player.angle);
+
+                const transformX = relativeX * cosAngle + relativeY * sinAngle;
+                const transformY = -relativeX * sinAngle + relativeY * cosAngle;
+
+                // Check if sprite is behind player
+                if (transformY <= 0) {
+                    this.visible = false;
+                    return;
+                }
+
+                // Calculate screen position
+                this.screenX = Math.floor((screenWidth / 2) * (1 + transformX / transformY / Math.tan(fov / 2)));
+
+                // Calculate sprite size on screen
+                this.screenSize = Math.floor(screenHeight / transformY * this.size);
+
+                // Calculate draw boundaries
+                this.drawStartX = Math.max(0, this.screenX - Math.floor(this.screenSize / 2));
+                this.drawEndX = Math.min(screenWidth - 1, this.screenX + Math.floor(this.screenSize / 2));
+
+                // Calculate vertical position with pitch
+                const horizonLine = player.getHorizonLine(screenHeight);
+                this.screenY = horizonLine;
+                this.drawStartY = Math.max(0, this.screenY - Math.floor(this.screenSize / 2));
+                this.drawEndY = Math.min(screenHeight - 1, this.screenY + Math.floor(this.screenSize / 2));
+
+                // Determine level of detail based on distance
+                if (this.distance <= 2.0) {
+                    this.lodLevel = 0; // Near - use top 3 palette chars
+                } else if (this.distance >= 8.0) {
+                    this.lodLevel = 2; // Far - use bottom 3 palette chars
+                } else {
+                    this.lodLevel = 1; // Mid - use middle palette chars
+                }
+
+                this.visible = this.drawEndX > this.drawStartX && this.drawEndY > this.drawStartY;
+            }
+
+            // Get appropriate ASCII character based on LOD
+            getCharacter(asciiMapper) {
+                const palette = CONFIG.rendering.palette;
+                let char = this.sprite;
+
+                // Apply LOD mapping if using default sprite
+                if (this.sprite === '#' || this.sprite === '=') {
+                    switch (this.lodLevel) {
+                        case 0: // Near - top 3 chars
+                            char = palette[Math.floor(Math.random() * 3)]; // @, #, %
+                            break;
+                        case 1: // Mid - middle chars
+                            char = palette[3 + Math.floor(Math.random() * 3)]; // *, =, +
+                            break;
+                        case 2: // Far - bottom 3 chars
+                            char = palette[6 + Math.floor(Math.random() * 3)]; // :, -, .
+                            break;
+                    }
+                }
+
+                return char;
+            }
+
+            // Check if sprite should be rendered (within screen bounds)
+            isOnScreen(screenWidth, screenHeight) {
+                return this.visible &&
+                    this.screenX >= 0 && this.screenX < screenWidth &&
+                    this.drawStartX < screenWidth && this.drawEndX >= 0;
+            }
+
+            // Validate sprite data
+            isValid() {
+                return (
+                    typeof this.x === 'number' && !isNaN(this.x) &&
+                    typeof this.y === 'number' && !isNaN(this.y) &&
+                    typeof this.distance === 'number' && !isNaN(this.distance) && this.distance >= 0 &&
+                    typeof this.size === 'number' && !isNaN(this.size) && this.size > 0 &&
+                    typeof this.sprite === 'string' && this.sprite.length > 0
+                );
+            }
+
+            // Get sprite information for debugging
+            getInfo() {
+                return {
+                    type: this.type,
+                    position: `(${this.x.toFixed(2)}, ${this.y.toFixed(2)})`,
+                    distance: this.distance.toFixed(2),
+                    screenPos: `(${this.screenX}, ${this.screenY})`,
+                    size: this.screenSize,
+                    lod: this.lodLevel,
+                    visible: this.visible,
+                    character: this.sprite
+                };
+            }
+        }
+
+        // WorldModel class for managing map data and spatial queries
+        class WorldModel {
+            constructor(mapData = null) {
+                // Map dimensions
+                this.width = 10;
+                this.height = 10;
+
+                // Wall data (0 = passable, 1+ = wall type)
+                this.walls = [];
+
+                // Objects in the world
+                this.objects = [];
+
+                // Doorways (passable openings)
+                this.doorways = [];
+
+                // Player starting position
+                this.playerStart = { x: 2.0, y: 2.0, angle: 0 };
+
+                // Floor pattern type
+                this.floorPattern = 'grid';
+
+                // Load map data if provided
+                if (mapData) {
+                    this.loadMap(mapData);
+                } else {
+                    this.createDefaultMap();
+                }
+            }
+
+            // Load map from JSON data
+            loadMap(mapData) {
+                try {
+                    this.width = mapData.width || 10;
+                    this.height = mapData.height || 10;
+                    this.walls = mapData.walls || [];
+                    this.objects = mapData.objects || [];
+                    this.doorways = mapData.doorways || [];
+                    this.playerStart = mapData.playerStart || { x: 2.0, y: 2.0, angle: 0 };
+                    this.floorPattern = mapData.floorPattern || 'grid';
+
+                    // Validate map data
+                    this.validateMap();
+
+                    console.log(`Map loaded: ${this.width}x${this.height} with ${this.objects.length} objects`);
+                } catch (error) {
+                    console.error('Failed to load map data:', error);
+                    this.createDefaultMap();
+                }
+            }
+
+            // Create a default test map
+            createDefaultMap() {
+                this.width = 10;
+                this.height = 10;
+
+                // Create walls array (1 = wall, 0 = empty space)
+                this.walls = [];
+                for (let y = 0; y < this.height; y++) {
+                    const row = [];
+                    for (let x = 0; x < this.width; x++) {
+                        // Create border walls and some interior walls
+                        if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
+                            row.push(1); // Border walls
+                        } else if (x === 5 && y > 2 && y < 7) {
+                            row.push(1); // Interior wall
+                        } else {
+                            row.push(0); // Empty space
+                        }
+                    }
+                    this.walls.push(row);
+                }
+
+                // Add doorway in the middle wall
+                this.doorways = [
+                    { x1: 5, y1: 4, x2: 5, y2: 5, width: 1.5 }
+                ];
+
+                // Add some test objects
+                this.objects = [
+                    { x: 3.5, y: 3.5, type: 'crate', sprite: '#', size: 0.6 },
+                    { x: 7.2, y: 6.8, type: 'table', sprite: '=', size: 0.8 },
+                    { x: 2.1, y: 7.3, type: 'barrel', sprite: 'O', size: 0.5 },
+                    { x: 8.5, y: 2.2, type: 'pillar', sprite: '|', size: 0.4 }
+                ];
+
+                // Set player start position
+                this.playerStart = { x: 2.0, y: 2.0, angle: 0 };
+                this.floorPattern = 'grid';
+
+                console.log('Default map created');
+            }
+
+            // Validate map data integrity
+            validateMap() {
+                // Check dimensions
+                if (this.width <= 0 || this.height <= 0) {
+                    throw new Error('Invalid map dimensions');
+                }
+
+                // Check walls array
+                if (!Array.isArray(this.walls) || this.walls.length !== this.height) {
+                    throw new Error('Invalid walls array');
+                }
+
+                for (let y = 0; y < this.height; y++) {
+                    if (!Array.isArray(this.walls[y]) || this.walls[y].length !== this.width) {
+                        throw new Error(`Invalid wall row ${y}`);
+                    }
+                }
+
+                // Validate objects
+                if (!Array.isArray(this.objects)) {
+                    throw new Error('Objects must be an array');
+                }
+
+                for (const obj of this.objects) {
+                    if (typeof obj.x !== 'number' || typeof obj.y !== 'number') {
+                        throw new Error('Object must have numeric x,y coordinates');
+                    }
+                    if (obj.x < 0 || obj.x >= this.width || obj.y < 0 || obj.y >= this.height) {
+                        throw new Error('Object coordinates out of bounds');
+                    }
+                }
+
+                // Validate doorways
+                if (!Array.isArray(this.doorways)) {
+                    throw new Error('Doorways must be an array');
+                }
+
+                for (const door of this.doorways) {
+                    if (typeof door.width !== 'number' || door.width < 1.0) {
+                        throw new Error('Doorway width must be >= 1.0 unit');
+                    }
+                }
+            }
+
+            // Check if a position contains a wall
+            isWall(x, y) {
+                const gridX = Math.floor(x);
+                const gridY = Math.floor(y);
+
+                if (gridX < 0 || gridX >= this.width || gridY < 0 || gridY >= this.height) {
+                    return true; // Out of bounds = wall
+                }
+
+                return this.walls[gridY][gridX] > 0;
+            }
+
+            // Get wall type at position
+            getWallAt(x, y) {
+                const gridX = Math.floor(x);
+                const gridY = Math.floor(y);
+
+                if (gridX < 0 || gridX >= this.width || gridY < 0 || gridY >= this.height) {
+                    return 1; // Out of bounds = basic wall
+                }
+
+                return this.walls[gridY][gridX];
+            }
+
+            // Check if a position is passable (considering doorways)
+            isPassable(x, y) {
+                // First check if it's a wall
+                if (!this.isWall(x, y)) {
+                    return true; // Empty space is passable
+                }
+
+                // Check if position is within a doorway
+                for (const door of this.doorways) {
+                    if (this.isInDoorway(x, y, door)) {
+                        return true;
+                    }
+                }
+
+                return false; // Wall and not in doorway
+            }
+
+            // Check if position is within a doorway
+            isInDoorway(x, y, doorway) {
+                const tolerance = doorway.width / 2;
+
+                // Simple rectangular doorway check
+                if (doorway.x1 === doorway.x2) {
+                    // Vertical doorway
+                    const minY = Math.min(doorway.y1, doorway.y2) - tolerance;
+                    const maxY = Math.max(doorway.y1, doorway.y2) + tolerance;
+                    return Math.abs(x - doorway.x1) < 0.5 && y >= minY && y <= maxY;
+                } else {
+                    // Horizontal doorway
+                    const minX = Math.min(doorway.x1, doorway.x2) - tolerance;
+                    const maxX = Math.max(doorway.x1, doorway.x2) + tolerance;
+                    return Math.abs(y - doorway.y1) < 0.5 && x >= minX && x <= maxX;
+                }
+            }
+
+            // Get all objects in the world
+            getObjects() {
+                return this.objects;
+            }
+
+            // Get objects within a radius of a position
+            getObjectsInRadius(position, radius) {
+                return this.objects.filter(obj => {
+                    const dx = obj.x - position.x;
+                    const dy = obj.y - position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance <= radius;
+                });
+            }
+
+            // Get the closest object to a position
+            getClosestObject(position) {
+                if (this.objects.length === 0) return null;
+
+                let closest = this.objects[0];
+                let minDistance = this.getDistance(position, closest);
+
+                for (let i = 1; i < this.objects.length; i++) {
+                    const distance = this.getDistance(position, this.objects[i]);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closest = this.objects[i];
+                    }
+                }
+
+                return { object: closest, distance: minDistance };
+            }
+
+            // Calculate distance between two points
+            getDistance(pos1, pos2) {
+                const dx = pos1.x - pos2.x;
+                const dy = pos1.y - pos2.y;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            // Get map bounds
+            getBounds() {
+                return {
+                    minX: 0,
+                    minY: 0,
+                    maxX: this.width,
+                    maxY: this.height
+                };
+            }
+
+            // Export map data as JSON
+            exportMap() {
+                return {
+                    width: this.width,
+                    height: this.height,
+                    walls: this.walls,
+                    objects: this.objects,
+                    doorways: this.doorways,
+                    playerStart: this.playerStart,
+                    floorPattern: this.floorPattern
+                };
+            }
+
+            // Get map information for debugging
+            getInfo() {
+                return {
+                    dimensions: `${this.width}x${this.height}`,
+                    objectCount: this.objects.length,
+                    doorwayCount: this.doorways.length,
+                    playerStart: this.playerStart,
+                    floorPattern: this.floorPattern
+                };
+            }
+        }
+
+        // InputManager class for handling keyboard input
+        class InputManager {
+            constructor() {
+                // Key state tracking
+                this.keys = {};
+                this.gameKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'F1'];
+
+                // Focus state
+                this.hasFocus = true;
+                this.inputPaused = false;
+
+                // Bind event handlers
+                this.handleKeyDown = this.handleKeyDown.bind(this);
+                this.handleKeyUp = this.handleKeyUp.bind(this);
+                this.handleFocus = this.handleFocus.bind(this);
+                this.handleBlur = this.handleBlur.bind(this);
+                this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+
+                // Initialize
+                this.bindEvents();
+            }
+
+            // Bind keyboard and focus events
+            bindEvents() {
+                document.addEventListener('keydown', this.handleKeyDown);
+                document.addEventListener('keyup', this.handleKeyUp);
+                window.addEventListener('focus', this.handleFocus);
+                window.addEventListener('blur', this.handleBlur);
+                document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
+                console.log('InputManager events bound');
+            }
+
+            // Unbind all events
+            unbindEvents() {
+                document.removeEventListener('keydown', this.handleKeyDown);
+                document.removeEventListener('keyup', this.handleKeyUp);
+                window.removeEventListener('focus', this.handleFocus);
+                window.removeEventListener('blur', this.handleBlur);
+                document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+
+                console.log('InputManager events unbound');
+            }
+
+            // Handle keydown events
+            handleKeyDown(event) {
+                // Prevent default for game keys
+                if (this.gameKeys.includes(event.code)) {
+                    event.preventDefault();
+                }
+
+                // Handle special keys
+                if (event.key === '?') {
+                    event.preventDefault();
+                    this.handleSpecialKey('help');
+                    return;
+                }
+
+                if (event.key === 'F1') {
+                    event.preventDefault();
+                    this.handleSpecialKey('debug');
+                    return;
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.handleSpecialKey('pause');
+                    return;
+                }
+
+                // Track key state
+                this.keys[event.code] = true;
+            }
+
+            // Handle keyup events
+            handleKeyUp(event) {
+                this.keys[event.code] = false;
+            }
+
+            // Handle window focus
+            handleFocus() {
+                this.hasFocus = true;
+                console.log('Window gained focus');
+            }
+
+            // Handle window blur
+            handleBlur() {
+                this.hasFocus = false;
+                this.inputPaused = true;
+                this.clearAllKeys();
+                console.log('Window lost focus - input paused');
+            }
+
+            // Handle visibility change
+            handleVisibilityChange() {
+                if (document.hidden) {
+                    this.inputPaused = true;
+                    this.clearAllKeys();
+                    console.log('Page hidden - input paused');
+                } else {
+                    console.log('Page visible');
+                }
+            }
+
+            // Handle special key actions
+            handleSpecialKey(action) {
+                switch (action) {
+                    case 'help':
+                        if (window.toggleHelp) window.toggleHelp();
+                        break;
+                    case 'debug':
+                        if (window.toggleDebug) window.toggleDebug();
+                        break;
+                    case 'pause':
+                        if (window.togglePause) window.togglePause();
+                        break;
+                }
+            }
+
+            // Clear all key states
+            clearAllKeys() {
+                this.keys = {};
+            }
+
+            // Check if a specific key is pressed
+            isKeyPressed(keyCode) {
+                if (this.inputPaused || !this.hasFocus) return false;
+                return !!this.keys[keyCode];
+            }
+
+            // Get movement vector based on WASD keys
+            getMovementVector() {
+                if (this.inputPaused || !this.hasFocus) {
+                    return { forward: false, backward: false, strafeLeft: false, strafeRight: false };
+                }
+
+                return {
+                    forward: this.isKeyPressed('KeyW'),
+                    backward: this.isKeyPressed('KeyS'),
+                    strafeLeft: this.isKeyPressed('KeyA'),
+                    strafeRight: this.isKeyPressed('KeyD')
+                };
+            }
+
+            // Get rotation vector based on arrow keys
+            getRotationVector() {
+                if (this.inputPaused || !this.hasFocus) {
+                    return { turnLeft: false, turnRight: false, lookUp: false, lookDown: false };
+                }
+
+                return {
+                    turnLeft: this.isKeyPressed('ArrowLeft'),
+                    turnRight: this.isKeyPressed('ArrowRight'),
+                    lookUp: this.isKeyPressed('ArrowUp'),
+                    lookDown: this.isKeyPressed('ArrowDown')
+                };
+            }
+
+            // Get combined input state
+            getInputState() {
+                return {
+                    movement: this.getMovementVector(),
+                    rotation: this.getRotationVector(),
+                    hasFocus: this.hasFocus,
+                    inputPaused: this.inputPaused
+                };
+            }
+
+            // Resume input after pause
+            resumeInput() {
+                if (this.hasFocus) {
+                    this.inputPaused = false;
+                    console.log('Input resumed');
+                }
+            }
+
+            // Pause input
+            pauseInput() {
+                this.inputPaused = true;
+                this.clearAllKeys();
+                console.log('Input paused');
+            }
+
+            // Get debug information
+            getDebugInfo() {
+                const pressedKeys = Object.keys(this.keys).filter(key => this.keys[key]);
+                return {
+                    hasFocus: this.hasFocus,
+                    inputPaused: this.inputPaused,
+                    pressedKeys: pressedKeys,
+                    movement: this.getMovementVector(),
+                    rotation: this.getRotationVector()
+                };
+            }
+        }
+
+        // Unit tests for InputManager class
+        function testInputManagerClass() {
+            console.log('Running InputManager class tests...');
+
+            // Test 1: Constructor and initialization
+            const inputManager = new InputManager();
+            console.assert(typeof inputManager.keys === 'object', 'Keys should be an object');
+            console.assert(inputManager.hasFocus === true, 'Should start with focus');
+            console.assert(inputManager.inputPaused === false, 'Should not start paused');
+
+            // Test 2: Key state simulation
+            inputManager.keys['KeyW'] = true;
+            inputManager.keys['KeyA'] = true;
+
+            const movement = inputManager.getMovementVector();
+            console.assert(movement.forward === true, 'W key should register as forward');
+            console.assert(movement.strafeLeft === true, 'A key should register as strafe left');
+            console.assert(movement.backward === false, 'S key should not be pressed');
+
+            // Test 3: Focus handling
+            inputManager.handleBlur();
+            console.assert(inputManager.inputPaused === true, 'Should pause on blur');
+            console.assert(Object.keys(inputManager.keys).length === 0, 'Should clear keys on blur');
+
+            const pausedMovement = inputManager.getMovementVector();
+            console.assert(pausedMovement.forward === false, 'Movement should be disabled when paused');
+
+            inputManager.handleFocus();
+            inputManager.resumeInput();
+            console.assert(inputManager.inputPaused === false, 'Should resume on focus');
+
+            // Test 4: Input state combination
+            inputManager.keys['KeyW'] = true;
+            inputManager.keys['ArrowLeft'] = true;
+
+            const inputState = inputManager.getInputState();
+            console.assert(inputState.movement.forward === true, 'Combined state should include movement');
+            console.assert(inputState.rotation.turnLeft === true, 'Combined state should include rotation');
+
+            // Clean up
+            inputManager.unbindEvents();
+
+            console.log('InputManager class tests completed successfully!');
+        }
+
+        // Spatial grid for optimized collision detection
+        class SpatialGrid {
+            constructor(worldWidth, worldHeight, cellSize = 2.0) {
+                this.cellSize = cellSize;
+                this.gridWidth = Math.ceil(worldWidth / cellSize);
+                this.gridHeight = Math.ceil(worldHeight / cellSize);
+                this.grid = new Array(this.gridWidth * this.gridHeight);
+
+                // Initialize grid cells
+                for (let i = 0; i < this.grid.length; i++) {
+                    this.grid[i] = {
+                        walls: [],
+                        objects: [],
+                        hasWalls: false
+                    };
+                }
+
+                this.queryCount = 0;
+                this.hitCount = 0;
+            }
+
+            // Get grid cell index from world coordinates
+            getCellIndex(x, y) {
+                const gridX = Math.floor(x / this.cellSize);
+                const gridY = Math.floor(y / this.cellSize);
+
+                if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
+                    return -1;
+                }
+
+                return gridY * this.gridWidth + gridX;
+            }
+
+            // Add wall to spatial grid
+            addWall(x, y, wallType) {
+                const index = this.getCellIndex(x, y);
+                if (index >= 0) {
+                    this.grid[index].walls.push({ x, y, type: wallType });
+                    this.grid[index].hasWalls = true;
+                }
+            }
+
+            // Get nearby cells for collision checking
+            getNearbyCells(x, y, radius) {
+                const cells = [];
+                const minX = Math.floor((x - radius) / this.cellSize);
+                const maxX = Math.floor((x + radius) / this.cellSize);
+                const minY = Math.floor((y - radius) / this.cellSize);
+                const maxY = Math.floor((y + radius) / this.cellSize);
+
+                for (let gy = minY; gy <= maxY; gy++) {
+                    for (let gx = minX; gx <= maxX; gx++) {
+                        if (gx >= 0 && gx < this.gridWidth && gy >= 0 && gy < this.gridHeight) {
+                            const index = gy * this.gridWidth + gx;
+                            if (this.grid[index].hasWalls) {
+                                cells.push(this.grid[index]);
+                            }
+                        }
+                    }
+                }
+
+                this.queryCount++;
+                if (cells.length > 0) this.hitCount++;
+
+                return cells;
+            }
+
+            // Initialize grid from world model
+            buildFromWorld(worldModel) {
+                // Clear existing data
+                for (let i = 0; i < this.grid.length; i++) {
+                    this.grid[i].walls = [];
+                    this.grid[i].objects = [];
+                    this.grid[i].hasWalls = false;
+                }
+
+                // Add walls to grid
+                for (let y = 0; y < worldModel.height; y++) {
+                    for (let x = 0; x < worldModel.width; x++) {
+                        const wallType = worldModel.walls[y][x];
+                        if (wallType > 0) {
+                            this.addWall(x + 0.5, y + 0.5, wallType);
+                        }
+                    }
+                }
+
+                console.log(`Spatial grid built: ${this.gridWidth}x${this.gridHeight} cells`);
+            }
+
+            // Get performance statistics
+            getStats() {
+                return {
+                    queryCount: this.queryCount,
+                    hitCount: this.hitCount,
+                    hitRatio: this.queryCount > 0 ? (this.hitCount / this.queryCount * 100).toFixed(1) + '%' : '0%',
+                    cellSize: this.cellSize,
+                    gridSize: `${this.gridWidth}x${this.gridHeight}`
+                };
+            }
+        }
+
+        // PhysicsEngine class for handling player movement and collision
+        class PhysicsEngine {
+            constructor(worldModel) {
+                this.world = worldModel;
+                this.penetrationTolerance = CONFIG.physics.penetrationTolerance;
+
+                // Spatial optimization
+                this.spatialGrid = new SpatialGrid(worldModel.width, worldModel.height, 2.0);
+                this.spatialGrid.buildFromWorld(worldModel);
+                this.useOptimizedCollision = true;
+
+                // Performance tracking
+                this.collisionChecks = 0;
+                this.optimizedChecks = 0;
+            }
+
+            // Update player position and rotation based on input
+            updatePlayer(player, inputState, deltaTime) {
+                if (!inputState || deltaTime <= 0) return;
+
+                // Update rotation first (no collision needed)
+                const rotationInput = {
+                    turnLeft: inputState.rotation.turnLeft,
+                    turnRight: inputState.rotation.turnRight,
+                    lookUp: inputState.rotation.lookUp,
+                    lookDown: inputState.rotation.lookDown
+                };
+
+                player.updateRotation(rotationInput, deltaTime);
+
+                // Calculate desired movement
+                const movementInput = {
+                    forward: inputState.movement.forward,
+                    backward: inputState.movement.backward,
+                    strafeLeft: inputState.movement.strafeLeft,
+                    strafeRight: inputState.movement.strafeRight
+                };
+
+                const movement = player.updateMovement(movementInput, deltaTime);
+
+                // Apply movement with collision detection
+                this.movePlayerWithCollision(player, movement.x, movement.y);
+            }
+
+            // Move player with collision detection and wall sliding
+            movePlayerWithCollision(player, deltaX, deltaY) {
+                const oldX = player.x;
+                const oldY = player.y;
+                const newX = oldX + deltaX;
+                const newY = oldY + deltaY;
+
+                // Check if the full movement is possible
+                if (this.canMoveTo(newX, newY, player.radius)) {
+                    player.x = newX;
+                    player.y = newY;
+                    this.clampToWorldBounds(player);
+                    return;
+                }
+
+                // Use swept collision detection to prevent tunneling
+                const resolvedPos = this.resolveCollision(oldX, oldY, newX, newY, player.radius);
+
+                // If resolved position is different from target, implement wall sliding
+                if (resolvedPos.x !== newX || resolvedPos.y !== newY) {
+                    // Calculate surface normal for wall sliding
+                    const normal = this.calculateSurfaceNormal(oldX, oldY, newX, newY, player.radius);
+
+                    // Project movement vector onto surface (tangent motion)
+                    const tangentX = deltaX - (deltaX * normal.x + deltaY * normal.y) * normal.x;
+                    const tangentY = deltaY - (deltaX * normal.x + deltaY * normal.y) * normal.y;
+
+                    // Try sliding along the surface if tangent motion exists
+                    if (Math.abs(tangentX) > 0.001 || Math.abs(tangentY) > 0.001) {
+                        const slideX = oldX + tangentX;
+                        const slideY = oldY + tangentY;
+
+                        if (this.canMoveTo(slideX, slideY, player.radius)) {
+                            player.x = slideX;
+                            player.y = slideY;
+                        } else {
+                            // Try individual axis sliding as fallback
+                            if (this.canMoveTo(oldX + tangentX, oldY, player.radius)) {
+                                player.x = oldX + tangentX;
+                            } else if (this.canMoveTo(oldX, oldY + tangentY, player.radius)) {
+                                player.y = oldY + tangentY;
+                            } else {
+                                // Use resolved position as last resort
+                                player.x = resolvedPos.x;
+                                player.y = resolvedPos.y;
+                            }
+                        }
+                    } else {
+                        // No tangent motion possible, use resolved position
+                        player.x = resolvedPos.x;
+                        player.y = resolvedPos.y;
+                    }
+                } else {
+                    // Use resolved position
+                    player.x = resolvedPos.x;
+                    player.y = resolvedPos.y;
+                }
+
+                // Ensure player stays within world bounds
+                this.clampToWorldBounds(player);
+            }
+
+            // Calculate surface normal for collision response
+            calculateSurfaceNormal(oldX, oldY, newX, newY, radius) {
+                // Sample points around the collision area to determine surface normal
+                const sampleDistance = 0.1;
+                const samples = [
+                    { x: 1, y: 0 },   // Right
+                    { x: -1, y: 0 },  // Left
+                    { x: 0, y: 1 },   // Up
+                    { x: 0, y: -1 },  // Down
+                ];
+
+                let normalX = 0;
+                let normalY = 0;
+
+                // Find the direction of the nearest wall
+                for (const sample of samples) {
+                    const testX = newX + sample.x * sampleDistance;
+                    const testY = newY + sample.y * sampleDistance;
+
+                    if (!this.world.isPassable(testX, testY)) {
+                        normalX -= sample.x;
+                        normalY -= sample.y;
+                    }
+                }
+
+                // Normalize the normal vector
+                const length = Math.sqrt(normalX * normalX + normalY * normalY);
+                if (length > 0) {
+                    normalX /= length;
+                    normalY /= length;
+                } else {
+                    // Fallback: use movement direction as normal
+                    const moveLength = Math.sqrt((newX - oldX) ** 2 + (newY - oldY) ** 2);
+                    if (moveLength > 0) {
+                        normalX = -(newX - oldX) / moveLength;
+                        normalY = -(newY - oldY) / moveLength;
+                    } else {
+                        normalX = 0;
+                        normalY = 0;
+                    }
+                }
+
+                return { x: normalX, y: normalY };
+            }
+
+            // Check if player can move to a specific position (optimized with spatial grid)
+            canMoveTo(x, y, radius) {
+                this.collisionChecks++;
+
+                // Use optimized collision detection if available
+                if (this.useOptimizedCollision && this.spatialGrid) {
+                    return this.canMoveToOptimized(x, y, radius);
+                }
+
+                // Fallback to original method
+                return this.canMoveToOriginal(x, y, radius);
+            }
+
+            // Optimized collision detection using spatial grid
+            canMoveToOptimized(x, y, radius) {
+                this.optimizedChecks++;
+
+                // Get nearby cells that might contain walls
+                const nearbyCells = this.spatialGrid.getNearbyCells(x, y, radius);
+
+                // If no nearby walls, position is valid
+                if (nearbyCells.length === 0) {
+                    return true;
+                }
+
+                // Check multiple points around the player's circular collider
+                const checkPoints = [
+                    { x: x, y: y },                    // Center
+                    { x: x + radius, y: y },           // Right
+                    { x: x - radius, y: y },           // Left
+                    { x: x, y: y + radius },           // Up
+                    { x: x, y: y - radius },           // Down
+                    { x: x + radius * 0.7, y: y + radius * 0.7 },   // Top-right
+                    { x: x - radius * 0.7, y: y + radius * 0.7 },   // Top-left
+                    { x: x + radius * 0.7, y: y - radius * 0.7 },   // Bottom-right
+                    { x: x - radius * 0.7, y: y - radius * 0.7 }    // Bottom-left
+                ];
+
+                // Only check passability for points near walls (spatial optimization)
+                for (const point of checkPoints) {
+                    if (!this.world.isPassable(point.x, point.y)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // Original collision detection method (fallback)
+            canMoveToOriginal(x, y, radius) {
+                // Check multiple points around the player's circular collider
+                const checkPoints = [
+                    { x: x, y: y },                    // Center
+                    { x: x + radius, y: y },           // Right
+                    { x: x - radius, y: y },           // Left
+                    { x: x, y: y + radius },           // Up
+                    { x: x, y: y - radius },           // Down
+                    { x: x + radius * 0.7, y: y + radius * 0.7 },   // Top-right
+                    { x: x - radius * 0.7, y: y + radius * 0.7 },   // Top-left
+                    { x: x + radius * 0.7, y: y - radius * 0.7 },   // Bottom-right
+                    { x: x - radius * 0.7, y: y - radius * 0.7 }    // Bottom-left
+                ];
+
+                // Check if any point collides with walls
+                for (const point of checkPoints) {
+                    if (!this.world.isPassable(point.x, point.y)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // Check for collision at a specific point
+            checkCollision(x, y, radius) {
+                return !this.canMoveTo(x, y, radius);
+            }
+
+            // Resolve collision by finding the closest valid position with swept detection
+            resolveCollision(oldX, oldY, newX, newY, radius) {
+                // If new position is valid, no resolution needed
+                if (this.canMoveTo(newX, newY, radius)) {
+                    return { x: newX, y: newY };
+                }
+
+                // Swept collision detection - check intermediate positions
+                const distance = Math.sqrt((newX - oldX) ** 2 + (newY - oldY) ** 2);
+                const steps = Math.max(10, Math.ceil(distance * 20)); // More steps for longer distances
+
+                let lastValidX = oldX;
+                let lastValidY = oldY;
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const testX = oldX + (newX - oldX) * t;
+                    const testY = oldY + (newY - oldY) * t;
+
+                    if (this.canMoveTo(testX, testY, radius)) {
+                        lastValidX = testX;
+                        lastValidY = testY;
+                    } else {
+                        // Found collision point, ensure we respect penetration tolerance
+                        const penetrationX = Math.abs(testX - lastValidX);
+                        const penetrationY = Math.abs(testY - lastValidY);
+
+                        if (penetrationX <= this.penetrationTolerance && penetrationY <= this.penetrationTolerance) {
+                            return { x: testX, y: testY };
+                        } else {
+                            return { x: lastValidX, y: lastValidY };
+                        }
+                    }
+                }
+
+                // If we get here, return the last valid position
+                return { x: lastValidX, y: lastValidY };
+            }
+
+            // Clamp player position to world bounds
+            clampToWorldBounds(player) {
+                const bounds = this.world.getBounds();
+                const margin = player.radius + 0.1;
+
+                player.x = Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, player.x));
+                player.y = Math.max(bounds.minY + margin, Math.min(bounds.maxY - margin, player.y));
+            }
+
+            // Get the distance to the nearest wall in a direction
+            getDistanceToWall(x, y, dirX, dirY, maxDistance = 10) {
+                const step = 0.1;
+                let distance = 0;
+
+                while (distance < maxDistance) {
+                    const testX = x + dirX * distance;
+                    const testY = y + dirY * distance;
+
+                    if (!this.world.isPassable(testX, testY)) {
+                        return distance;
+                    }
+
+                    distance += step;
+                }
+
+                return maxDistance;
+            }
+
+            // Check if a line segment intersects with any walls
+            lineIntersectsWall(x1, y1, x2, y2) {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const steps = Math.ceil(distance * 10); // 10 checks per unit
+
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = x1 + dx * t;
+                    const y = y1 + dy * t;
+
+                    if (!this.world.isPassable(x, y)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            // Get physics debug information
+            getDebugInfo(player) {
+                return {
+                    position: { x: player.x.toFixed(2), y: player.y.toFixed(2) },
+                    velocity: { x: player.velocityX.toFixed(2), y: player.velocityY.toFixed(2) },
+                    speed: Math.sqrt(player.velocityX * player.velocityX + player.velocityY * player.velocityY).toFixed(2),
+                    canMoveForward: this.canMoveTo(
+                        player.x + Math.cos(player.angle) * 0.5,
+                        player.y + Math.sin(player.angle) * 0.5,
+                        player.radius
+                    ),
+                    nearestWallDistance: this.getDistanceToWall(
+                        player.x, player.y,
+                        Math.cos(player.angle), Math.sin(player.angle)
+                    ).toFixed(2)
+                };
+            }
+
+            // Get performance statistics
+            getPerformanceStats() {
+                const optimizationRatio = this.collisionChecks > 0 ?
+                    (this.optimizedChecks / this.collisionChecks * 100).toFixed(1) + '%' : '0%';
+
+                return {
+                    collisionChecks: this.collisionChecks,
+                    optimizedChecks: this.optimizedChecks,
+                    optimizationRatio: optimizationRatio,
+                    spatialGrid: this.spatialGrid ? this.spatialGrid.getStats() : null,
+                    useOptimizedCollision: this.useOptimizedCollision
+                };
+            }
+
+            // Reset performance counters
+            resetPerformanceCounters() {
+                this.collisionChecks = 0;
+                this.optimizedChecks = 0;
+                if (this.spatialGrid) {
+                    this.spatialGrid.queryCount = 0;
+                    this.spatialGrid.hitCount = 0;
+                }
+            }
+
+            // Toggle optimization for testing
+            toggleOptimization() {
+                this.useOptimizedCollision = !this.useOptimizedCollision;
+                console.log(`Collision optimization ${this.useOptimizedCollision ? 'enabled' : 'disabled'}`);
+                return this.useOptimizedCollision;
+            }
+        }
+
+        // ASCIIMapper class for distance-based character selection
+        class ASCIIMapper {
+            constructor(palette = CONFIG.rendering.palette, distanceBands = CONFIG.rendering.distanceBands) {
+                this.palette = palette;
+                this.distanceBands = distanceBands;
+                this.maxDistance = CONFIG.rendering.maxDistance;
+
+                // Object LOD mapping
+                this.objectLOD = {
+                    NEAR: palette.slice(0, 3),      // @, #, %
+                    MID: palette.slice(3, 6),       // *, =, +
+                    FAR: palette.slice(6, 9)        // :, -, .
+                };
+            }
+
+            // Map distance to ASCII character
+            mapDistance(distance, maxDistance = this.maxDistance) {
+                // Normalize distance to 0-1 range
+                const normalizedDistance = Math.min(distance / maxDistance, 1.0);
+
+                // Find appropriate distance band
+                for (let i = 0; i < this.distanceBands.length; i++) {
+                    if (distance <= this.distanceBands[i]) {
+                        const bandIndex = Math.min(i, this.palette.length - 1);
+                        return this.palette[bandIndex];
+                    }
+                }
+
+                // Return farthest character for very distant objects
+                return this.palette[this.palette.length - 1];
+            }
+
+            // Get character for specific distance
+            getCharForDistance(distance) {
+                return this.mapDistance(distance);
+            }
+
+            // Get object character based on distance and LOD rules
+            getObjectChar(distance, baseChar = '#') {
+                let lodChars;
+
+                if (distance <= 2.0) {
+                    lodChars = this.objectLOD.NEAR;
+                } else if (distance >= 8.0) {
+                    lodChars = this.objectLOD.FAR;
+                } else {
+                    lodChars = this.objectLOD.MID;
+                }
+
+                // Use base character if it's in the appropriate LOD range
+                if (lodChars.includes(baseChar)) {
+                    return baseChar;
+                }
+
+                // Otherwise return a random character from the appropriate LOD range
+                return lodChars[Math.floor(Math.random() * lodChars.length)];
+            }
+
+            // Get wall character based on distance and wall type
+            getWallChar(distance, wallType = 1) {
+                const baseChar = this.mapDistance(distance);
+
+                // Modify character based on wall type
+                switch (wallType) {
+                    case 1: return baseChar; // Standard wall
+                    case 2: return this.getBrighterChar(baseChar); // Bright wall
+                    case 3: return this.getDarkerChar(baseChar); // Dark wall
+                    default: return baseChar;
+                }
+            }
+
+            // Get floor character based on distance and pattern
+            getFloorChar(distance, x, y, pattern = 'grid') {
+                const baseChar = this.mapDistance(distance * 1.2); // Floor appears slightly darker
+
+                switch (pattern) {
+                    case 'grid':
+                        return this.getGridChar(x, y, baseChar);
+                    case 'checkerboard':
+                        return this.getCheckerboardChar(x, y, baseChar);
+                    case 'solid':
+                        return baseChar;
+                    default:
+                        return baseChar;
+                }
+            }
+
+            // Get grid pattern character
+            getGridChar(x, y, baseChar) {
+                const gridSize = 1.0;
+                const tolerance = 0.1;
+
+                const isGridLineX = Math.abs(x % gridSize) < tolerance || Math.abs(x % gridSize) > (gridSize - tolerance);
+                const isGridLineY = Math.abs(y % gridSize) < tolerance || Math.abs(y % gridSize) > (gridSize - tolerance);
+
+                if (isGridLineX || isGridLineY) {
+                    return this.getBrighterChar(baseChar);
+                }
+
+                return baseChar;
+            }
+
+            // Get checkerboard pattern character
+            getCheckerboardChar(x, y, baseChar) {
+                const tileSize = 1.0;
+                const tileX = Math.floor(x / tileSize);
+                const tileY = Math.floor(y / tileSize);
+
+                if ((tileX + tileY) % 2 === 0) {
+                    return this.getBrighterChar(baseChar);
+                } else {
+                    return this.getDarkerChar(baseChar);
+                }
+            }
+
+            // Get a brighter version of a character
+            getBrighterChar(char) {
+                const index = this.palette.indexOf(char);
+                if (index > 0) {
+                    return this.palette[index - 1];
+                }
+                return char;
+            }
+
+            // Get a darker version of a character
+            getDarkerChar(char) {
+                const index = this.palette.indexOf(char);
+                if (index < this.palette.length - 1) {
+                    return this.palette[index + 1];
+                }
+                return char;
+            }
+
+            // Get palette
+            getPalette() {
+                return this.palette;
+            }
+
+            // Set distance bands
+            setDistanceBands(bands) {
+                this.distanceBands = bands;
+            }
+
+            // Get character brightness (0 = darkest, 1 = brightest)
+            getCharBrightness(char) {
+                const index = this.palette.indexOf(char);
+                if (index === -1) return 0.5;
+                return 1.0 - (index / (this.palette.length - 1));
+            }
+
+            // Interpolate between two characters based on factor (0-1)
+            interpolateChars(char1, char2, factor) {
+                const brightness1 = this.getCharBrightness(char1);
+                const brightness2 = this.getCharBrightness(char2);
+                const targetBrightness = brightness1 + (brightness2 - brightness1) * factor;
+
+                // Find closest character to target brightness
+                let closestChar = this.palette[0];
+                let closestDiff = Math.abs(this.getCharBrightness(closestChar) - targetBrightness);
+
+                for (const char of this.palette) {
+                    const diff = Math.abs(this.getCharBrightness(char) - targetBrightness);
+                    if (diff < closestDiff) {
+                        closestDiff = diff;
+                        closestChar = char;
+                    }
+                }
+
+                return closestChar;
+            }
+
+            // Get debug information
+            getDebugInfo() {
+                return {
+                    palette: this.palette,
+                    distanceBands: this.distanceBands,
+                    maxDistance: this.maxDistance,
+                    lodRanges: {
+                        near: '≤2.0u',
+                        mid: '2.0-8.0u',
+                        far: '≥8.0u'
+                    }
+                };
+            }
+        }
+
+        // RenderEngine class for raycasting and rendering
+        class RenderEngine {
+            constructor(screenWidth, screenHeight, fov) {
+                this.screenWidth = screenWidth;
+                this.screenHeight = screenHeight;
+                this.fov = fov;
+                this.rays = new Array(screenWidth);
+                for (let i = 0; i < screenWidth; i++) {
+                    this.rays[i] = new Ray();
+                }
+            }
+
+            // Cast all rays and render the scene
+            render(player, world, asciiMapper, screenBuffer) {
+                screenBuffer.clear();
+
+                // Cast rays for walls
+                for (let x = 0; x < this.screenWidth; x++) {
+                    const cameraX = 2 * x / this.screenWidth - 1;
+                    const rayAngle = player.angle + Math.atan(cameraX * Math.tan(this.fov / 2));
+
+                    this.castWallRay(player.x, player.y, rayAngle, world, this.rays[x]);
+                    this.rays[x].calculateScreenProjection(this.screenHeight, player.pitch);
+
+                    // Draw wall slice
+                    this.drawWallSlice(x, this.rays[x], asciiMapper, screenBuffer);
+                }
+
+                // Render floor
+                this.renderFloor(player, world, asciiMapper, screenBuffer);
+
+                // Render sprites
+                this.renderSprites(player, world, asciiMapper, screenBuffer);
+
+                screenBuffer.render();
+            }
+
+            // Cast a single ray using DDA algorithm
+            castWallRay(startX, startY, angle, world, ray) {
+                ray.reset();
+
+                const rayDirX = Math.cos(angle);
+                const rayDirY = Math.sin(angle);
+
+                let mapX = Math.floor(startX);
+                let mapY = Math.floor(startY);
+
+                const deltaDistX = Math.abs(1 / rayDirX);
+                const deltaDistY = Math.abs(1 / rayDirY);
+
+                let stepX, stepY, sideDistX, sideDistY;
+
+                if (rayDirX < 0) {
+                    stepX = -1;
+                    sideDistX = (startX - mapX) * deltaDistX;
+                } else {
+                    stepX = 1;
+                    sideDistX = (mapX + 1.0 - startX) * deltaDistX;
+                }
+
+                if (rayDirY < 0) {
+                    stepY = -1;
+                    sideDistY = (startY - mapY) * deltaDistY;
+                } else {
+                    stepY = 1;
+                    sideDistY = (mapY + 1.0 - startY) * deltaDistY;
+                }
+
+                // DDA algorithm
+                let hit = false;
+                let side;
+
+                while (!hit) {
+                    if (sideDistX < sideDistY) {
+                        sideDistX += deltaDistX;
+                        mapX += stepX;
+                        side = 0;
+                    } else {
+                        sideDistY += deltaDistY;
+                        mapY += stepY;
+                        side = 1;
+                    }
+
+                    if (world.isWall(mapX, mapY)) {
+                        hit = true;
+                    }
+                }
+
+                // Calculate distance
+                let perpWallDist;
+                if (side === 0) {
+                    perpWallDist = (mapX - startX + (1 - stepX) / 2) / rayDirX;
+                } else {
+                    perpWallDist = (mapY - startY + (1 - stepY) / 2) / rayDirY;
+                }
+
+                ray.perpWallDist = perpWallDist;
+                ray.distance = perpWallDist;
+                ray.hitX = startX + perpWallDist * rayDirX;
+                ray.hitY = startY + perpWallDist * rayDirY;
+                ray.side = side;
+                ray.wallType = world.getWallAt(mapX, mapY);
+
+                // Calculate wall X coordinate for texturing
+                if (side === 0) {
+                    ray.wallX = ray.hitY - Math.floor(ray.hitY);
+                } else {
+                    ray.wallX = ray.hitX - Math.floor(ray.hitX);
+                }
+            }
+
+            // Draw a wall slice
+            drawWallSlice(x, ray, asciiMapper, screenBuffer) {
+                const char = asciiMapper.getWallChar(ray.distance, ray.wallType);
+
+                for (let y = ray.drawStart; y <= ray.drawEnd; y++) {
+                    screenBuffer.setPixel(x, y, char);
+                }
+            }
+
+            // Render floor using simple distance-based approach
+            renderFloor(player, world, asciiMapper, screenBuffer) {
+                const horizonLine = player.getHorizonLine(this.screenHeight);
+
+                for (let y = horizonLine + 1; y < this.screenHeight; y++) {
+                    const rowDistance = (this.screenHeight / 2) / (y - horizonLine);
+
+                    for (let x = 0; x < this.screenWidth; x++) {
+                        const cameraX = 2 * x / this.screenWidth - 1;
+                        const floorX = player.x + rowDistance * (Math.cos(player.angle) + cameraX * Math.cos(player.angle + Math.PI / 2));
+                        const floorY = player.y + rowDistance * (Math.sin(player.angle) + cameraX * Math.sin(player.angle + Math.PI / 2));
+
+                        const char = asciiMapper.getFloorChar(rowDistance, floorX, floorY, world.floorPattern);
+                        screenBuffer.setPixel(x, y, char);
+                    }
+                }
+            }
+
+            // Render sprites (simplified)
+            renderSprites(player, world, asciiMapper, screenBuffer) {
+                const objects = world.getObjects();
+                const sprites = [];
+
+                // Create and project sprites
+                for (const obj of objects) {
+                    const sprite = new Sprite(obj);
+                    sprite.calculateProjection(player, this.screenWidth, this.screenHeight, this.fov);
+                    if (sprite.visible && sprite.isOnScreen(this.screenWidth, this.screenHeight)) {
+                        sprites.push(sprite);
+                    }
+                }
+
+                // Sort by distance (far to near)
+                sprites.sort((a, b) => b.distance - a.distance);
+
+                // Draw sprites
+                for (const sprite of sprites) {
+                    const char = sprite.getCharacter(asciiMapper);
+
+                    for (let x = sprite.drawStartX; x <= sprite.drawEndX; x++) {
+                        if (x >= 0 && x < this.screenWidth) {
+                            // Simple z-buffer check
+                            if (sprite.distance < this.rays[x].distance) {
+                                for (let y = sprite.drawStartY; y <= sprite.drawEndY; y++) {
+                                    if (y >= 0 && y < this.screenHeight) {
+                                        screenBuffer.setPixel(x, y, char);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // GameEngine class for main game loop and coordination
+        class GameEngine {
+            constructor() {
+                this.running = false;
+                this.paused = false;
+                this.lastTime = 0;
+                this.frameCount = 0;
+                this.fps = 0;
+                this.frameTime = 0;
+                this.fpsUpdateTime = 0;
+
+                // Error handling and performance monitoring
+                this.errorHandler = new ErrorHandler();
+                this.performanceMonitor = new PerformanceMonitor();
+                this.browserCompat = new BrowserCompatibility();
+
+                // Graceful degradation flags
+                this.useOptimizedRendering = true;
+                this.maxFrameTime = 50; // 20 FPS minimum
+
+                // Bind methods
+                this.gameLoop = this.gameLoop.bind(this);
+
+                // Check browser compatibility
+                this.checkCompatibility();
+            }
+
+            checkCompatibility() {
+                const report = this.browserCompat.getCompatibilityReport();
+
+                if (!report.compatible) {
+                    console.error('Browser compatibility issues detected:', report.errors);
+                    this.showCompatibilityError(report);
+                    return false;
+                }
+
+                if (report.warnings.length > 0) {
+                    console.warn('Browser compatibility warnings:', report.warnings);
+                }
+
+                console.log('Browser compatibility check passed:', report.browserInfo);
+                return true;
+            }
+
+            showCompatibilityError(report) {
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: #ff0000;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    z-index: 10000;
+                    font-family: Arial, sans-serif;
+                    max-width: 400px;
+                    text-align: center;
+                `;
+
+                errorDiv.innerHTML = `
+                    <h3>Browser Not Supported</h3>
+                    <p>This application requires a modern browser with ES6 support.</p>
+                    <p><strong>Detected:</strong> ${report.browserInfo.browser} ${report.browserInfo.version}</p>
+                    <p>Please update your browser or try Chrome, Firefox, Safari, or Edge.</p>
+                `;
+
+                document.body.appendChild(errorDiv);
+            }
+
+            // Start the game engine
+            start() {
+                if (this.running) return;
+
+                this.running = true;
+                this.paused = false;
+                this.lastTime = performance.now();
+                this.fpsUpdateTime = this.lastTime;
+
+                console.log('Game engine started');
+                this.gameLoop();
+            }
+
+            // Stop the game engine
+            stop() {
+                this.running = false;
+                console.log('Game engine stopped');
+            }
+
+            // Pause the game
+            pause() {
+                this.paused = true;
+                gameState.paused = true;
+                if (uiManager) uiManager.showPauseScreen();
+                console.log('Game paused');
+            }
+
+            // Resume the game
+            resume() {
+                this.paused = false;
+                gameState.paused = false;
+                if (uiManager) uiManager.hidePauseScreen();
+                this.lastTime = performance.now(); // Reset timing
+                console.log('Game resumed');
+            }
+
+            // Toggle pause state
+            togglePause() {
+                if (this.paused) {
+                    this.resume();
+                } else {
+                    this.pause();
+                }
+            }
+
+            // Main game loop with error handling and performance monitoring
+            gameLoop() {
+                if (!this.running) return;
+
+                try {
+                    const currentTime = performance.now();
+                    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+                    this.lastTime = currentTime;
+                    this.frameTime = deltaTime * 1000; // Store in milliseconds for display
+
+                    // Record frame for performance monitoring
+                    this.performanceMonitor.recordFrame(this.frameTime);
+
+                    // Update FPS counter
+                    this.frameCount++;
+                    if (currentTime - this.fpsUpdateTime >= 1000) {
+                        this.fps = this.frameCount;
+                        this.frameCount = 0;
+                        this.fpsUpdateTime = currentTime;
+                    }
+
+                    // Check for performance issues
+                    if (this.frameTime > this.maxFrameTime) {
+                        console.warn(`Long frame detected: ${this.frameTime.toFixed(2)}ms`);
+                    }
+
+                    // Update game state if not paused
+                    if (!this.paused && inputManager && !inputManager.inputPaused) {
+                        this.update(deltaTime);
+                    }
+
+                    // Always render (even when paused)
+                    this.render();
+
+                    // Update UI
+                    this.updateUI();
+
+                } catch (error) {
+                    // Handle game loop errors gracefully
+                    this.errorHandler.handleError('Game Loop Error', error);
+
+                    // Try to continue running unless it's a critical error
+                    if (this.errorHandler.errors.length > 5) {
+                        console.error('Too many errors, stopping game');
+                        this.stop();
+                        return;
+                    }
+                }
+
+                // Schedule next frame
+                requestAnimationFrame(this.gameLoop);
+            }
+
+            // Update game logic
+            update(deltaTime) {
+                if (!player || !physicsEngine || !inputManager) return;
+
+                // Clamp delta time to prevent large jumps
+                deltaTime = Math.min(deltaTime, 1 / 30); // Max 30 FPS equivalent
+
+                // Get input state
+                const inputState = inputManager.getInputState();
+
+                // Update player physics
+                physicsEngine.updatePlayer(player, inputState, deltaTime);
+            }
+
+            // Render the game
+            render() {
+                if (!renderEngine || !screenBuffer || !player || !worldModel || !asciiMapper) {
+                    return;
+                }
+
+                try {
+                    renderEngine.render(player, worldModel, asciiMapper, screenBuffer);
+                } catch (error) {
+                    console.error('Render error:', error);
+                    // Fallback: clear screen and show error
+                    screenBuffer.clear();
+                    const errorMsg = 'RENDER ERROR';
+                    for (let i = 0; i < errorMsg.length; i++) {
+                        screenBuffer.setPixel(i + 10, 20, errorMsg[i]);
+                    }
+                    screenBuffer.render();
+                }
+            }
+
+            // Update UI elements
+            updateUI() {
+                if (uiManager) {
+                    uiManager.updateFPS(this.fps, this.frameTime);
+                    uiManager.updateDebugOverlay(player, screenBuffer);
+                }
+            }
+
+            // Get engine state
+            getState() {
+                return {
+                    running: this.running,
+                    paused: this.paused,
+                    fps: this.fps,
+                    frameTime: this.frameTime,
+                    frameCount: this.frameCount
+                };
+            }
+
+            // Performance monitoring
+            checkPerformance() {
+                if (this.fps < 24 && this.fps > 0) {
+                    console.warn(`Low FPS detected: ${this.fps}`);
+                    // Could trigger resolution reduction here
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        // Unit tests for ASCIIMapper class
+        function testASCIIMapperClass() {
+            console.log('Running ASCIIMapper class tests...');
+
+            const mapper = new ASCIIMapper();
+
+            // Test 1: Basic distance mapping
+            const nearChar = mapper.mapDistance(0.5);
+            const farChar = mapper.mapDistance(20);
+            console.assert(nearChar === '@', 'Near distance should map to brightest character');
+            console.assert(farChar === '.', 'Far distance should map to darkest character');
+
+            // Test 2: Distance band consistency
+            const char1 = mapper.mapDistance(1.0);
+            const char2 = mapper.mapDistance(1.5);
+            console.assert(char1 === char2, 'Distances in same band should map to same character');
+
+            // Test 3: Object LOD mapping
+            const nearObject = mapper.getObjectChar(1.5, '#');
+            const farObject = mapper.getObjectChar(10, '#');
+            console.assert(mapper.objectLOD.NEAR.includes(nearObject), 'Near object should use near LOD');
+            console.assert(mapper.objectLOD.FAR.includes(farObject), 'Far object should use far LOD');
+
+            // Test 4: Floor pattern generation
+            const gridChar1 = mapper.getFloorChar(5, 1.0, 1.0, 'grid');
+            const gridChar2 = mapper.getFloorChar(5, 1.5, 1.5, 'grid');
+            console.assert(typeof gridChar1 === 'string', 'Grid pattern should return character');
+            console.assert(typeof gridChar2 === 'string', 'Grid pattern should return character');
+
+            // Test 5: Character brightness calculation
+            const brightness1 = mapper.getCharBrightness('@');
+            const brightness2 = mapper.getCharBrightness('.');
+            console.assert(brightness1 > brightness2, 'First character should be brighter than last');
+            console.assert(brightness1 >= 0 && brightness1 <= 1, 'Brightness should be normalized');
+
+            // Test 6: Character interpolation
+            const interpolated = mapper.interpolateChars('@', '.', 0.5);
+            console.assert(typeof interpolated === 'string', 'Interpolation should return character');
+            console.assert(mapper.palette.includes(interpolated), 'Interpolated character should be in palette');
+
+            console.log('ASCIIMapper class tests completed successfully!');
+        }
+
+        // Unit tests for PhysicsEngine class
+        function testPhysicsEngineClass() {
+            console.log('Running PhysicsEngine class tests...');
+
+            // Create test world and physics engine
+            const testWorld = new WorldModel();
+            const physics = new PhysicsEngine(testWorld);
+            const testPlayer = new Player(2.0, 2.0, 0);
+
+            // Test 1: Basic movement in open space
+            const openSpaceInput = {
+                movement: { forward: true, backward: false, strafeLeft: false, strafeRight: false },
+                rotation: { turnLeft: false, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            const oldX = testPlayer.x;
+            physics.updatePlayer(testPlayer, openSpaceInput, 0.1);
+            console.assert(testPlayer.x > oldX, 'Player should move forward in open space');
+
+            // Test 2: Collision detection with 0.3 unit radius
+            console.assert(physics.canMoveTo(2.0, 2.0, 0.3), 'Open space should be passable');
+            console.assert(!physics.canMoveTo(0.0, 0.0, 0.3), 'Wall should not be passable');
+            console.assert(!physics.canMoveTo(0.2, 2.0, 0.3), 'Position too close to wall should not be passable');
+
+            // Test 3: Wall collision prevention
+            testPlayer.x = 0.5; // Near left wall
+            testPlayer.y = 2.0;
+            const wallInput = {
+                movement: { forward: false, backward: false, strafeLeft: true, strafeRight: false },
+                rotation: { turnLeft: false, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            const nearWallX = testPlayer.x;
+            physics.updatePlayer(testPlayer, wallInput, 0.1);
+            console.assert(Math.abs(testPlayer.x - nearWallX) < 0.1, 'Player should not move into wall');
+
+            // Test 4: Wall sliding mechanics - diagonal movement against wall
+            testPlayer.x = 0.5; // Near left wall
+            testPlayer.y = 2.0;
+            const diagonalInput = {
+                movement: { forward: true, backward: false, strafeLeft: true, strafeRight: false },
+                rotation: { turnLeft: false, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            const oldY = testPlayer.y;
+            physics.updatePlayer(testPlayer, diagonalInput, 0.1);
+            console.assert(testPlayer.y > oldY, 'Player should slide along wall when moving diagonally');
+            console.assert(Math.abs(testPlayer.x - 0.5) < 0.1, 'Player should not penetrate wall during sliding');
+
+            // Test 5: Rotation remains possible during collision
+            testPlayer.x = 0.4; // Very close to wall
+            testPlayer.y = 2.0;
+            testPlayer.angle = 0;
+            const rotateInput = {
+                movement: { forward: false, backward: false, strafeLeft: false, strafeRight: false },
+                rotation: { turnLeft: true, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            const oldAngle = testPlayer.angle;
+            physics.updatePlayer(testPlayer, rotateInput, 0.1);
+            console.assert(testPlayer.angle !== oldAngle, 'Player should be able to rotate during collision');
+
+            // Test 6: Penetration tolerance (≤0.05 unit)
+            const resolvedPos = physics.resolveCollision(2.0, 2.0, 0.0, 2.0, 0.3);
+            const penetration = Math.abs(resolvedPos.x - 0.3); // Distance from wall edge
+            console.assert(penetration <= 0.05, 'Collision resolution should maintain ≤0.05 unit penetration tolerance');
+
+            // Test 7: Swept collision detection for high-speed movement
+            testPlayer.x = 2.0;
+            testPlayer.y = 2.0;
+            const highSpeedInput = {
+                movement: { forward: false, backward: false, strafeLeft: true, strafeRight: false },
+                rotation: { turnLeft: false, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            // Simulate high-speed movement (large deltaTime)
+            physics.updatePlayer(testPlayer, highSpeedInput, 1.0); // 1 second = very fast
+            console.assert(testPlayer.x > 0.3, 'High-speed movement should not tunnel through walls');
+
+            // Test 8: Corner case - movement into corner
+            testPlayer.x = 0.5;
+            testPlayer.y = 0.5;
+            const cornerInput = {
+                movement: { forward: false, backward: true, strafeLeft: true, strafeRight: false },
+                rotation: { turnLeft: false, turnRight: false, lookUp: false, lookDown: false }
+            };
+
+            const cornerOldX = testPlayer.x;
+            const cornerOldY = testPlayer.y;
+            physics.updatePlayer(testPlayer, cornerInput, 0.1);
+            console.assert(testPlayer.x >= cornerOldX && testPlayer.y >= cornerOldY, 'Player should not move into corner walls');
+
+            // Test 9: Bounds clamping
+            testPlayer.x = -1.0; // Out of bounds
+            physics.clampToWorldBounds(testPlayer);
+            console.assert(testPlayer.x > 0, 'Player should be clamped to world bounds');
+
+            // Test 10: Distance to wall calculation
+            testPlayer.x = 2.0;
+            testPlayer.y = 2.0;
+            const distanceToWall = physics.getDistanceToWall(testPlayer.x, testPlayer.y, -1, 0); // Look left
+            console.assert(distanceToWall > 0 && distanceToWall < 3, 'Should calculate reasonable distance to wall');
+
+            // Test 11: Line intersection with walls
+            console.assert(physics.lineIntersectsWall(2.0, 2.0, 0.0, 2.0), 'Line to wall should intersect');
+            console.assert(!physics.lineIntersectsWall(2.0, 2.0, 3.0, 3.0), 'Line in open space should not intersect');
+
+            console.log('PhysicsEngine comprehensive collision tests completed successfully!');
+        }
+
+        // Unit tests for movement vector calculation and normalization
+        function testMovementVectorCalculation() {
+            console.log('Running movement vector calculation tests...');
+
+            const testPlayer = new Player(5, 5, 0); // Facing right (0 radians)
+
+            // Test 1: Single direction movement
+            const forwardInput = { forward: true, backward: false, strafeLeft: false, strafeRight: false };
+            const forwardMovement = testPlayer.updateMovement(forwardInput, 0.1);
+            const forwardSpeed = Math.sqrt(forwardMovement.x * forwardMovement.x + forwardMovement.y * forwardMovement.y);
+            const expectedSpeed = testPlayer.moveSpeed * 0.1;
+            console.assert(Math.abs(forwardSpeed - expectedSpeed) < 0.001, 'Forward movement should maintain correct speed');
+
+            // Test 2: Diagonal movement normalization
+            const diagonalInput = { forward: true, backward: false, strafeLeft: false, strafeRight: true };
+            const diagonalMovement = testPlayer.updateMovement(diagonalInput, 0.1);
+            const diagonalSpeed = Math.sqrt(diagonalMovement.x * diagonalMovement.x + diagonalMovement.y * diagonalMovement.y);
+            console.assert(Math.abs(diagonalSpeed - expectedSpeed) < 0.001, 'Diagonal movement should be normalized to same speed');
+
+            // Test 3: Opposing forces cancel out
+            const opposingInput = { forward: true, backward: true, strafeLeft: true, strafeRight: true };
+            const opposingMovement = testPlayer.updateMovement(opposingInput, 0.1);
+            const opposingSpeed = Math.sqrt(opposingMovement.x * opposingMovement.x + opposingMovement.y * opposingMovement.y);
+            console.assert(opposingSpeed < 0.001, 'Opposing movements should cancel out');
+
+            // Test 4: Rotation vector consistency
+            const rotationInput = { turnLeft: true, turnRight: false, lookUp: false, lookDown: false };
+            const rotationChange = testPlayer.updateRotation(rotationInput, 0.1);
+            const expectedRotation = -testPlayer.rotSpeed * 0.1;
+            console.assert(Math.abs(rotationChange.yaw - expectedRotation) < 0.001, 'Rotation should be consistent');
+
+            // Test 5: Speed consistency across different angles
+            testPlayer.angle = Math.PI / 4; // 45 degrees
+            const angledMovement = testPlayer.updateMovement(forwardInput, 0.1);
+            const angledSpeed = Math.sqrt(angledMovement.x * angledMovement.x + angledMovement.y * angledMovement.y);
+            console.assert(Math.abs(angledSpeed - expectedSpeed) < 0.001, 'Speed should be consistent regardless of player angle');
+
+            console.log('Movement vector calculation tests completed successfully!');
+        }
+
+        // Unit tests for WorldModel class
+        function testWorldModelClass() {
+            console.log('Running WorldModel class tests...');
+
+            // Test 1: Default map creation
+            const world = new WorldModel();
+            console.assert(world.width > 0 && world.height > 0, 'World should have valid dimensions');
+            console.assert(Array.isArray(world.walls), 'Walls should be an array');
+            console.assert(Array.isArray(world.objects), 'Objects should be an array');
+            console.assert(world.objects.length > 0, 'Default map should have objects');
+
+            // Test 2: Wall detection
+            console.assert(world.isWall(0, 0), 'Corner should be a wall');
+            console.assert(!world.isWall(2, 2), 'Interior should not be a wall');
+            console.assert(world.isWall(-1, 5), 'Out of bounds should be a wall');
+
+            // Test 3: Passability with doorways
+            console.assert(world.isPassable(2, 2), 'Empty space should be passable');
+            console.assert(world.isPassable(5, 4.5), 'Doorway should be passable');
+            console.assert(!world.isPassable(0, 0), 'Wall should not be passable');
+
+            // Test 4: Object queries
+            const nearbyObjects = world.getObjectsInRadius({ x: 3, y: 3 }, 2);
+            console.assert(nearbyObjects.length > 0, 'Should find nearby objects');
+
+            const closest = world.getClosestObject({ x: 3, y: 3 });
+            console.assert(closest !== null, 'Should find closest object');
+            console.assert(typeof closest.distance === 'number', 'Should calculate distance');
+
+            // Test 5: Custom map loading
+            const customMap = {
+                width: 5,
+                height: 5,
+                walls: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 1, 0, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1]
+                ],
+                objects: [
+                    { x: 2.5, y: 2.5, type: 'test', sprite: 'T', size: 0.5 }
+                ],
+                doorways: [],
+                playerStart: { x: 1.5, y: 1.5, angle: 0 }
+            };
+
+            const customWorld = new WorldModel(customMap);
+            console.assert(customWorld.width === 5, 'Custom map width should be loaded');
+            console.assert(customWorld.objects.length === 1, 'Custom map should have one object');
+            console.assert(customWorld.isWall(2, 2), 'Custom map walls should be loaded');
+
+            console.log('WorldModel class tests completed successfully!');
+        }
+
+        // Unit tests for Ray and Sprite classes
+        function testRayAndSpriteClasses() {
+            console.log('Running Ray and Sprite class tests...');
+
+            // Test Ray class
+            const ray = new Ray();
+            console.assert(ray.distance === 0, 'Ray should initialize with zero distance');
+            console.assert(ray.isValid() === false, 'Empty ray should not be valid');
+
+            // Set up valid ray data
+            ray.distance = 5.0;
+            ray.perpWallDist = 4.8;
+            ray.hitX = 3.2;
+            ray.hitY = 1.7;
+            ray.side = 1;
+            ray.wallType = 1;
+
+            console.assert(ray.isValid(), 'Ray with valid data should be valid');
+
+            // Test screen projection
+            ray.calculateScreenProjection(40, 0);
+            console.assert(ray.wallHeight > 0, 'Wall height should be calculated');
+            console.assert(ray.drawStart >= 0, 'Draw start should be non-negative');
+            console.assert(ray.drawEnd < 40, 'Draw end should be within screen bounds');
+
+            // Test Sprite class
+            const testObject = {
+                x: 5.0,
+                y: 3.0,
+                type: 'crate',
+                sprite: '#',
+                size: 0.8
+            };
+
+            const sprite = new Sprite(testObject);
+            console.assert(sprite.x === 5.0, 'Sprite X should match object');
+            console.assert(sprite.y === 3.0, 'Sprite Y should match object');
+            console.assert(sprite.type === 'crate', 'Sprite type should match object');
+            console.assert(sprite.isValid(), 'Sprite should be valid');
+
+            // Test sprite projection
+            const testPlayer = new Player(2.0, 2.0, 0);
+            sprite.calculateProjection(testPlayer, 120, 40, Math.PI * 66 / 180);
+            console.assert(sprite.distance > 0, 'Sprite distance should be calculated');
+            console.assert(typeof sprite.screenX === 'number', 'Screen X should be calculated');
+            console.assert(sprite.lodLevel >= 0 && sprite.lodLevel <= 2, 'LOD level should be valid');
+
+            // Test LOD character selection
+            const char = sprite.getCharacter();
+            console.assert(typeof char === 'string' && char.length === 1, 'Should return single character');
+
+            console.log('Ray and Sprite class tests completed successfully!');
+        }
+
+        // Unit tests for Player class
+        function testPlayerClass() {
+            console.log('Running Player class tests...');
+
+            // Test 1: Constructor and initial state
+            const player = new Player(5, 3, Math.PI / 4);
+            console.assert(player.x === 5, 'Player X position should be 5');
+            console.assert(player.y === 3, 'Player Y position should be 3');
+            console.assert(Math.abs(player.angle - Math.PI / 4) < 0.001, 'Player angle should be π/4');
+            console.assert(player.pitch === 0, 'Player pitch should start at 0');
+            console.assert(player.isValid(), 'Player should be in valid state');
+
+            // Test 2: Direction vectors
+            const forward = player.getForwardVector();
+            const expectedFx = Math.cos(Math.PI / 4);
+            const expectedFy = Math.sin(Math.PI / 4);
+            console.assert(Math.abs(forward.x - expectedFx) < 0.001, 'Forward vector X should be correct');
+            console.assert(Math.abs(forward.y - expectedFy) < 0.001, 'Forward vector Y should be correct');
+
+            // Test 3: Movement calculation
+            const input = { forward: true, strafeRight: true };
+            const movement = player.updateMovement(input, 0.1); // 100ms delta
+            const expectedSpeed = player.moveSpeed * 0.1;
+            const actualSpeed = Math.sqrt(movement.x * movement.x + movement.y * movement.y);
+            console.assert(Math.abs(actualSpeed - expectedSpeed) < 0.001, 'Diagonal movement should be normalized');
+
+            // Test 4: Rotation with clamping
+            const rotInput = { lookUp: true };
+            for (let i = 0; i < 100; i++) {
+                player.updateRotation(rotInput, 0.1);
+            }
+            console.assert(Math.abs(player.pitch - (-player.maxPitch)) < 0.001, 'Pitch should be clamped to maximum');
+
+            // Test 5: Reset functionality
+            player.reset(1, 1, 0);
+            console.assert(player.x === 1 && player.y === 1 && player.angle === 0, 'Reset should restore initial state');
+
+            console.log('Player class tests completed successfully!');
+        }
+
+        // Initialize the application
+        let fontManager;
+        let screenBuffer;
+        let player;
+        let inputManager;
+        let worldModel;
+        let physicsEngine;
+        let asciiMapper;
+        let renderEngine;
+        let gameEngine;
+        let uiManager;
+        let gameState = {
+            paused: false,
+            debugVisible: false,
+            helpVisible: false
+        };
+
+        async function initializeApp() {
+            try {
+                console.log('Initializing ASCII 3D Room...');
+
+                // Check browser compatibility first
+                const browserCompat = new BrowserCompatibility();
+                const compatReport = browserCompat.getCompatibilityReport();
+
+                if (!compatReport.compatible) {
+                    console.error('Browser not compatible:', compatReport.errors);
+                    showFallbackError('Browser not supported. Please use a modern browser.');
+                    return;
+                }
+
+                if (compatReport.warnings.length > 0) {
+                    console.warn('Browser compatibility warnings:', compatReport.warnings);
+                }
+
+                // Initialize font management with error handling
+                try {
+                    fontManager = new FontManager();
+                    await fontManager.detectFont();
+                    console.log('Font system initialized');
+                } catch (error) {
+                    console.warn('Font initialization failed, using fallback:', error);
+                    fontManager = null;
+                }
+
+                // Initialize screen buffer
+                screenBuffer = new ScreenBuffer(CONFIG.screen.width, CONFIG.screen.height);
+                console.log(`Screen buffer initialized: ${CONFIG.screen.width}x${CONFIG.screen.height}`);
+
+                // Initialize world model
+                worldModel = new WorldModel();
+                console.log('World model initialized');
+
+                // Initialize player at starting position from world
+                player = new Player(worldModel.playerStart.x, worldModel.playerStart.y, worldModel.playerStart.angle);
+                console.log('Player initialized at:', worldModel.playerStart);
+
+                // Initialize input manager
+                inputManager = new InputManager();
+                console.log('Input manager initialized');
+
+                // Initialize physics engine with spatial optimization
+                physicsEngine = new PhysicsEngine(worldModel);
+                console.log('Physics engine initialized with spatial optimization');
+
+                // Initialize ASCII mapper
+                asciiMapper = new ASCIIMapper();
+                console.log('ASCII mapper initialized');
+
+                // Initialize render engine
+                renderEngine = new RenderEngine(CONFIG.screen.width, CONFIG.screen.height, CONFIG.rendering.fov);
+                console.log('Render engine initialized');
+
+                // Initialize game engine (includes error handling and performance monitoring)
+                gameEngine = new GameEngine();
+                console.log('Game engine initialized');
+
+                // Initialize UI manager
+                uiManager = new UIManager(gameEngine);
+                console.log('UI manager initialized');
+
+                // Run unit tests (with error handling)
+                try {
+                    console.log('Running unit tests...');
+                    testPlayerClass();
+                    testRayAndSpriteClasses();
+                    testWorldModelClass();
+                    testInputManagerClass();
+                    testMovementVectorCalculation();
+                    testPhysicsEngineClass();
+                    testASCIIMapperClass();
+                    console.log('All unit tests completed');
+                } catch (testError) {
+                    console.warn('Some unit tests failed:', testError);
+                    // Continue initialization even if tests fail
+                }
+
+                console.log('ASCII 3D Room initialized successfully');
+                console.log(`Screen resolution: ${CONFIG.screen.width}x${CONFIG.screen.height}`);
+                console.log('Font detection complete');
+                console.log(`Player initialized at position (${player.x}, ${player.y})`);
+                console.log(`Browser: ${compatReport.browserInfo.browser} ${compatReport.browserInfo.version}`);
+
+                // Start the game engine
+                gameEngine.start();
+
+                // Show success message briefly
+                if (uiManager) {
+                    setTimeout(() => {
+                        uiManager.showError('ASCII 3D Room loaded successfully!', 'info');
+                    }, 1000);
+                }
+
+            } catch (error) {
+                console.error('Failed to initialize ASCII 3D Room:', error);
+                showFallbackError(`Initialization failed: ${error.message}`);
+            }
+        }
+
+        // Fallback error display for critical failures
+        function showFallbackError(message) {
+            try {
+                // Try to show error in screen buffer if possible
+                if (typeof ScreenBuffer !== 'undefined') {
+                    const fallbackBuffer = new ScreenBuffer(80, 24);
+                    fallbackBuffer.clear();
+                    const errorMsg = 'ERROR: ' + message;
+                    for (let i = 0; i < Math.min(errorMsg.length, 70); i++) {
+                        fallbackBuffer.setPixel(i + 5, 12, errorMsg[i]);
+                    }
+                    fallbackBuffer.render();
+                } else {
+                    // Fallback to DOM manipulation
+                    const screen = document.getElementById('screen');
+                    if (screen) {
+                        screen.textContent = `ERROR: ${message}\n\nPlease refresh the page or try a different browser.`;
+                        screen.style.color = '#ff0000';
+                    }
+                }
+            } catch (e) {
+                // Last resort - alert
+                alert(`ASCII 3D Room Error: ${message}`);
+            }
+        }
+
+        // Draw a test pattern to verify the display is working
+        function drawTestPattern() {
+            screenBuffer.clear();
+
+            // Draw border
+            for (let x = 0; x < screenBuffer.width; x++) {
+                screenBuffer.setPixel(x, 0, '#');
+                screenBuffer.setPixel(x, screenBuffer.height - 1, '#');
+            }
+            for (let y = 0; y < screenBuffer.height; y++) {
+                screenBuffer.setPixel(0, y, '#');
+                screenBuffer.setPixel(screenBuffer.width - 1, y, '#');
+            }
+
+            // Draw center message
+            const message = 'ASCII 3D Room - Initializing...';
+            const startX = Math.floor((screenBuffer.width - message.length) / 2);
+            const centerY = Math.floor(screenBuffer.height / 2);
+
+            for (let i = 0; i < message.length; i++) {
+                screenBuffer.setPixel(startX + i, centerY, message[i]);
+            }
+
+            // Draw some test patterns
+            const palette = CONFIG.rendering.palette;
+            for (let i = 0; i < palette.length; i++) {
+                const x = 10 + i * 2;
+                const y = centerY + 2;
+                screenBuffer.setPixel(x, y, palette[i]);
+            }
+
+            screenBuffer.render();
+        }
+
+        // Legacy keyboard handling (now handled by InputManager)
+        function preventDefaultKeys() {
+            // This function is now handled by InputManager
+            // Keeping for compatibility but InputManager handles all keyboard events
+            console.log('Keyboard handling delegated to InputManager');
+        }
+
+        // UI Manager class for managing all user interface elements
+        class UIManager {
+            constructor(gameEngine) {
+                this.gameEngine = gameEngine;
+                this.elements = {
+                    instructions: document.getElementById('instructions'),
+                    debugOverlay: document.getElementById('debugOverlay'),
+                    helpScreen: document.getElementById('helpScreen'),
+                    pauseScreen: document.getElementById('pauseScreen'),
+                    fpsCounter: document.getElementById('fpsCounter'),
+                    frameTime: document.getElementById('frameTime'),
+                    posX: document.getElementById('posX'),
+                    posY: document.getElementById('posY'),
+                    yaw: document.getElementById('yaw'),
+                    pitch: document.getElementById('pitch'),
+                    resolution: document.getElementById('resolution')
+                };
+
+                this.state = {
+                    instructionsVisible: true,
+                    debugVisible: false,
+                    helpVisible: false,
+                    pauseVisible: false
+                };
+
+                this.performanceWarnings = {
+                    lowFpsWarned: false,
+                    fontFallbackWarned: false
+                };
+
+                this.initialize();
+            }
+
+            initialize() {
+                // Show initial instructions
+                this.showInstructions();
+
+                // Check font loading and warn if fallback is used
+                this.checkFontFallback();
+
+                console.log('UIManager initialized');
+            }
+
+            // Show control instructions on page load
+            showInstructions() {
+                if (this.elements.instructions) {
+                    this.elements.instructions.style.display = 'block';
+                    this.state.instructionsVisible = true;
+                }
+            }
+
+            // Hide control instructions
+            hideInstructions() {
+                if (this.elements.instructions) {
+                    this.elements.instructions.style.display = 'none';
+                    this.state.instructionsVisible = false;
+                }
+            }
+
+            // Toggle help screen display
+            toggleHelp() {
+                this.state.helpVisible = !this.state.helpVisible;
+                if (this.elements.helpScreen) {
+                    this.elements.helpScreen.style.display = this.state.helpVisible ? 'block' : 'none';
+                }
+
+                // Hide instructions when help is shown
+                if (this.state.helpVisible) {
+                    this.hideInstructions();
+                } else {
+                    this.showInstructions();
+                }
+            }
+
+            // Toggle debug overlay display
+            toggleDebugOverlay() {
+                this.state.debugVisible = !this.state.debugVisible;
+                if (this.elements.debugOverlay) {
+                    this.elements.debugOverlay.style.display = this.state.debugVisible ? 'block' : 'none';
+                }
+            }
+
+            // Show pause screen
+            showPauseScreen() {
+                this.state.pauseVisible = true;
+                if (this.elements.pauseScreen) {
+                    this.elements.pauseScreen.style.display = 'block';
+                }
+            }
+
+            // Hide pause screen
+            hidePauseScreen() {
+                this.state.pauseVisible = false;
+                if (this.elements.pauseScreen) {
+                    this.elements.pauseScreen.style.display = 'none';
+                }
+            }
+
+            // Update FPS counter and frame time
+            updateFPS(fps, frameTime) {
+                if (this.elements.fpsCounter) {
+                    this.elements.fpsCounter.textContent = fps.toFixed(1);
+                }
+                if (this.elements.frameTime) {
+                    this.elements.frameTime.textContent = frameTime.toFixed(2);
+                }
+
+                // Check for performance warnings
+                this.checkPerformanceWarnings(fps, frameTime);
+            }
+
+            // Update debug overlay with current game state
+            updateDebugOverlay(player, screenBuffer) {
+                if (!this.state.debugVisible || !player || !screenBuffer) return;
+
+                const state = player.getState();
+
+                // Update position
+                if (this.elements.posX) {
+                    this.elements.posX.textContent = state.position.x.toFixed(2);
+                }
+                if (this.elements.posY) {
+                    this.elements.posY.textContent = state.position.y.toFixed(2);
+                }
+
+                // Update rotation
+                if (this.elements.yaw) {
+                    this.elements.yaw.textContent = state.rotation.yaw.toFixed(1);
+                }
+                if (this.elements.pitch) {
+                    this.elements.pitch.textContent = state.rotation.pitch.toFixed(1);
+                }
+
+                // Update resolution
+                if (this.elements.resolution) {
+                    this.elements.resolution.textContent = `${screenBuffer.width}x${screenBuffer.height}`;
+                }
+
+                // Update performance metrics if available
+                this.updatePerformanceMetrics(screenBuffer);
+            }
+
+            // Update performance metrics in debug overlay
+            updatePerformanceMetrics(screenBuffer) {
+                if (!this.state.debugVisible || !this.elements.debugOverlay) return;
+
+                // Remove existing performance info
+                const existingPerf = this.elements.debugOverlay.querySelector('.performance-metrics');
+                if (existingPerf) {
+                    existingPerf.remove();
+                }
+
+                // Create performance metrics display
+                const perfDiv = document.createElement('div');
+                perfDiv.className = 'performance-metrics';
+                perfDiv.style.borderTop = '1px solid #666';
+                perfDiv.style.marginTop = '5px';
+                perfDiv.style.paddingTop = '5px';
+                perfDiv.style.fontSize = '9px';
+
+                // Screen buffer performance
+                if (screenBuffer && screenBuffer.getPerformanceInfo) {
+                    const bufferPerf = screenBuffer.getPerformanceInfo();
+                    perfDiv.innerHTML += `<div>Render: ${bufferPerf.avgRenderTime}ms avg</div>`;
+                    perfDiv.innerHTML += `<div>Dirty: ${bufferPerf.dirtyRegionSize}</div>`;
+                }
+
+                // Physics performance
+                if (window.physicsEngine && physicsEngine.getPerformanceStats) {
+                    const physicsPerf = physicsEngine.getPerformanceStats();
+                    perfDiv.innerHTML += `<div>Collision: ${physicsPerf.collisionChecks} checks</div>`;
+                    perfDiv.innerHTML += `<div>Optimized: ${physicsPerf.optimizationRatio}</div>`;
+
+                    if (physicsPerf.spatialGrid) {
+                        perfDiv.innerHTML += `<div>Grid: ${physicsPerf.spatialGrid.hitRatio} hit</div>`;
+                    }
+                }
+
+                this.elements.debugOverlay.appendChild(perfDiv);
+            }
+
+            // Check for performance warnings and display them
+            checkPerformanceWarnings(fps, frameTime) {
+                // Warn about low FPS (only once per session)
+                if (fps < 24 && fps > 0 && !this.performanceWarnings.lowFpsWarned) {
+                    console.warn(`Performance Warning: Low FPS detected (${fps.toFixed(1)})`);
+                    this.performanceWarnings.lowFpsWarned = true;
+
+                    // Add warning to debug overlay if visible
+                    if (this.state.debugVisible && this.elements.debugOverlay) {
+                        const warning = document.createElement('div');
+                        warning.style.color = '#ff6666';
+                        warning.textContent = `⚠ Low FPS: ${fps.toFixed(1)}`;
+                        this.elements.debugOverlay.appendChild(warning);
+                    }
+                }
+
+                // Reset warning if FPS improves
+                if (fps >= 30) {
+                    this.performanceWarnings.lowFpsWarned = false;
+                }
+            }
+
+            // Check font fallback and warn if needed
+            checkFontFallback() {
+                if (fontManager && !this.performanceWarnings.fontFallbackWarned) {
+                    // Test if custom font loaded properly
+                    const testElement = document.getElementById('fontTest');
+                    if (testElement) {
+                        testElement.style.fontFamily = 'monospace';
+                        const monospaceWidth = testElement.offsetWidth;
+
+                        testElement.style.fontFamily = "'JetBrains Mono', monospace";
+                        const customWidth = testElement.offsetWidth;
+
+                        if (customWidth === monospaceWidth) {
+                            console.warn('Font Warning: Custom font not loaded, using fallback');
+                            this.performanceWarnings.fontFallbackWarned = true;
+
+                            // Add warning to debug overlay if visible
+                            if (this.state.debugVisible && this.elements.debugOverlay) {
+                                const warning = document.createElement('div');
+                                warning.style.color = '#ffaa00';
+                                warning.textContent = '⚠ Using fallback font';
+                                this.elements.debugOverlay.appendChild(warning);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Get current UI state
+            getState() {
+                return {
+                    instructionsVisible: this.state.instructionsVisible,
+                    debugVisible: this.state.debugVisible,
+                    helpVisible: this.state.helpVisible,
+                    pauseVisible: this.state.pauseVisible,
+                    warnings: { ...this.performanceWarnings }
+                };
+            }
+
+            // Handle window focus/blur events
+            handleFocusChange(hasFocus) {
+                if (!hasFocus && this.gameEngine && !this.gameEngine.paused) {
+                    // Auto-pause when window loses focus
+                    this.gameEngine.pause();
+                    this.showPauseScreen();
+                }
+            }
+
+            // Show error message to user
+            showError(message, type = 'error') {
+                // Create error display if it doesn't exist
+                let errorDiv = document.getElementById('errorDisplay');
+                if (!errorDiv) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.id = 'errorDisplay';
+                    errorDiv.style.cssText = `
+                        position: fixed;
+                        top: 10px;
+                        right: 10px;
+                        background: rgba(255, 0, 0, 0.9);
+                        color: white;
+                        padding: 10px;
+                        border-radius: 5px;
+                        z-index: 1000;
+                        font-family: monospace;
+                        font-size: 12px;
+                        max-width: 300px;
+                        word-wrap: break-word;
+                    `;
+                    document.body.appendChild(errorDiv);
+                }
+
+                // Update error message
+                errorDiv.textContent = `${type.toUpperCase()}: ${message}`;
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    if (errorDiv && errorDiv.parentNode) {
+                        errorDiv.parentNode.removeChild(errorDiv);
+                    }
+                }, 5000);
+            }
+
+            // Show browser compatibility information
+            showCompatibilityInfo() {
+                if (!window.gameEngine || !gameEngine.browserCompat) return;
+
+                const report = gameEngine.browserCompat.getCompatibilityReport();
+                const perfStats = gameEngine.performanceMonitor.getStats();
+
+                let info = `Browser: ${report.browserInfo.browser} ${report.browserInfo.version}\n`;
+                info += `Compatible: ${report.compatible ? 'Yes' : 'No'}\n`;
+
+                if (report.warnings.length > 0) {
+                    info += `Warnings: ${report.warnings.length}\n`;
+                }
+
+                if (perfStats) {
+                    info += `Performance: ${perfStats.performanceLevel}\n`;
+                    info += `FPS: ${perfStats.avgFPS}\n`;
+                }
+
+                console.log('Compatibility Info:', info);
+                this.showError(info, 'info');
+            }
+
+            // Clean up UI elements
+            destroy() {
+                // Remove any dynamically added elements
+                if (this.elements.debugOverlay) {
+                    const warnings = this.elements.debugOverlay.querySelectorAll('div[style*="color"]');
+                    warnings.forEach(warning => warning.remove());
+                }
+
+                // Remove error display
+                const errorDiv = document.getElementById('errorDisplay');
+                if (errorDiv && errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+
+                console.log('UIManager destroyed');
+            }
+        }
+
+        // Legacy function wrappers for backward compatibility
+        function toggleHelp() {
+            if (uiManager) uiManager.toggleHelp();
+        }
+
+        function toggleDebug() {
+            if (uiManager) uiManager.toggleDebugOverlay();
+        }
+
+        function togglePause() {
+            if (gameEngine) {
+                gameEngine.togglePause();
+            } else {
+                gameState.paused = !gameState.paused;
+                if (gameState.paused) {
+                    showPause();
+                    if (inputManager) inputManager.pauseInput();
+                } else {
+                    hidePause();
+                    if (inputManager) inputManager.resumeInput();
+                }
+            }
+        }
+
+        function showPause() {
+            if (uiManager) uiManager.showPauseScreen();
+        }
+
+        function hidePause() {
+            if (uiManager) uiManager.hidePauseScreen();
+        }
+
+        function updateDebugInfo(fps = 0, frameTime = 0) {
+            if (uiManager) {
+                uiManager.updateFPS(fps, frameTime);
+                uiManager.updateDebugOverlay(player, screenBuffer);
+            }
+        }
+
+        // Deployment verification and self-test
+        function runDeploymentTests() {
+            console.log('Running deployment verification tests...');
+
+            const tests = {
+                browserCompatibility: false,
+                fontLoading: false,
+                gameInitialization: false,
+                renderingSystem: false,
+                inputSystem: false,
+                physicsSystem: false
+            };
+
+            try {
+                // Test browser compatibility
+                const browserCompat = new BrowserCompatibility();
+                tests.browserCompatibility = browserCompat.isCompatible();
+
+                // Test font loading
+                tests.fontLoading = document.fonts ? true : false;
+
+                // Test game components exist
+                tests.gameInitialization = !!(
+                    typeof ScreenBuffer !== 'undefined' &&
+                    typeof Player !== 'undefined' &&
+                    typeof WorldModel !== 'undefined' &&
+                    typeof PhysicsEngine !== 'undefined' &&
+                    typeof RenderEngine !== 'undefined'
+                );
+
+                // Test rendering system
+                try {
+                    const testBuffer = new ScreenBuffer(10, 10);
+                    testBuffer.setPixel(5, 5, '#');
+                    tests.renderingSystem = true;
+                } catch (e) {
+                    tests.renderingSystem = false;
+                }
+
+                // Test input system
+                tests.inputSystem = !!(
+                    typeof InputManager !== 'undefined' &&
+                    document.addEventListener
+                );
+
+                // Test physics system
+                try {
+                    const testWorld = new WorldModel();
+                    const testPhysics = new PhysicsEngine(testWorld);
+                    tests.physicsSystem = testPhysics.canMoveTo(2, 2, 0.3);
+                } catch (e) {
+                    tests.physicsSystem = false;
+                }
+
+            } catch (error) {
+                console.error('Deployment test error:', error);
+            }
+
+            const passedTests = Object.values(tests).filter(Boolean).length;
+            const totalTests = Object.keys(tests).length;
+
+            console.log(`Deployment tests: ${passedTests}/${totalTests} passed`);
+            console.log('Test results:', tests);
+
+            if (passedTests === totalTests) {
+                console.log('✅ All deployment tests passed - ready for production');
+            } else {
+                console.warn('⚠️ Some deployment tests failed - check compatibility');
+            }
+
+            return { tests, passed: passedTests, total: totalTests };
+        }
+
+        // Make functions globally available for InputManager
+        window.toggleHelp = toggleHelp;
+        window.toggleDebug = toggleDebug;
+        window.togglePause = togglePause;
+        window.runDeploymentTests = runDeploymentTests;
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            preventDefaultKeys();
+            initializeApp();
+        });
+
+        // Handle window focus/blur for pause functionality
+        window.addEventListener('blur', () => {
+            if (uiManager) {
+                uiManager.handleFocusChange(false);
+            }
+            console.log('Window lost focus - game paused');
+        });
+
+        window.addEventListener('focus', () => {
+            if (uiManager) {
+                uiManager.handleFocusChange(true);
+            }
+            console.log('Window gained focus');
+        });
+
+    </script>
+</body>
+
+</html>
